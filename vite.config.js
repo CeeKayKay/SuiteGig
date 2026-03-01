@@ -5,6 +5,12 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
-    open: true
+    open: true,
+    proxy: {
+      '/api/plaid': {
+        target: 'http://localhost:3005',
+        changeOrigin: true,
+      }
+    }
   }
 })

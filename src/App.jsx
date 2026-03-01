@@ -5,7 +5,7 @@ import _ from "lodash";
 // CONSTANTS & DATA
 // ═══════════════════════════════════════════════════════
 
-const EXPENSE_CATEGORIES = [
+const DEFAULT_EXPENSE_CATEGORIES = [
   "Office Supplies", "Software & Tools", "Marketing", "Travel",
   "Meals & Entertainment", "Professional Services", "Insurance",
   "Rent & Utilities", "Equipment", "Payroll", "Taxes",
@@ -85,6 +85,29 @@ const sampleTransactions = [
   { id: generateId(), date: "2026-01-20", description: "Mystery payment XREF991", amount: -250.00, category: "Unknown", account: "Chase Business CC", reconciled: false },
 ];
 
+const sampleCreditCards = [
+  { id: generateId(), brand: "Chase Ink Business Preferred", last4: "4821", color: "#1a73e8", status: "connected", balance: 1283.92, limit: 10000, lastSync: "2026-02-28T10:30:00" },
+  { id: generateId(), brand: "Amex Business Gold", last4: "3092", color: "#006fcf", status: "connected", balance: 742.18, limit: 15000, lastSync: "2026-02-28T09:15:00" },
+];
+
+const sampleExpenses = [
+  { id: generateId(), date: "2026-02-28", merchant: "Adobe Creative Cloud", amount: 54.99, category: "Software & Tools", cardLast4: "4821", recurring: true, receipt: true, notes: "Monthly subscription", status: "categorized" },
+  { id: generateId(), date: "2026-02-27", merchant: "Office Depot", amount: 127.43, category: "Office Supplies", cardLast4: "4821", recurring: false, receipt: true, notes: "", status: "categorized" },
+  { id: generateId(), date: "2026-02-26", merchant: "Delta Airlines", amount: 389.00, category: "Travel", cardLast4: "3092", recurring: false, receipt: false, notes: "Client meeting in Chicago", status: "categorized" },
+  { id: generateId(), date: "2026-02-25", merchant: "Unknown Charge #4821", amount: 89.00, category: "Unknown", cardLast4: "4821", recurring: false, receipt: false, notes: "", status: "needs_review" },
+  { id: generateId(), date: "2026-02-24", merchant: "Google Workspace", amount: 14.40, category: "Software & Tools", cardLast4: "4821", recurring: true, receipt: true, notes: "Business email", status: "categorized" },
+  { id: generateId(), date: "2026-02-23", merchant: "Uber", amount: 34.56, category: "Travel", cardLast4: "4821", recurring: false, receipt: true, notes: "Client meeting downtown", status: "categorized" },
+  { id: generateId(), date: "2026-02-22", merchant: "Staples", amount: 63.21, category: "Office Supplies", cardLast4: "3092", recurring: false, receipt: false, notes: "", status: "needs_review" },
+  { id: generateId(), date: "2026-02-20", merchant: "AWS", amount: 187.32, category: "Software & Tools", cardLast4: "4821", recurring: true, receipt: true, notes: "Cloud hosting", status: "categorized" },
+  { id: generateId(), date: "2026-02-18", merchant: "Hilton Hotels", amount: 245.00, category: "Travel", cardLast4: "3092", recurring: false, receipt: true, notes: "Conference stay", status: "categorized" },
+  { id: generateId(), date: "2026-02-15", merchant: "Slack", amount: 12.50, category: "Subscriptions", cardLast4: "4821", recurring: true, receipt: true, notes: "Team comms", status: "categorized" },
+  { id: generateId(), date: "2026-02-14", merchant: "Chipotle", amount: 28.45, category: "Meals & Entertainment", cardLast4: "4821", recurring: false, receipt: false, notes: "Team lunch", status: "categorized" },
+  { id: generateId(), date: "2026-02-12", merchant: "FedEx", amount: 42.00, category: "Office Supplies", cardLast4: "3092", recurring: false, receipt: true, notes: "Client package", status: "categorized" },
+  { id: generateId(), date: "2026-02-10", merchant: "Zoom Pro", amount: 15.99, category: "Subscriptions", cardLast4: "4821", recurring: true, receipt: true, notes: "Video calls", status: "categorized" },
+  { id: generateId(), date: "2026-02-08", merchant: "Mystery Payment XREF991", amount: 250.00, category: "Unknown", cardLast4: "4821", recurring: false, receipt: false, notes: "", status: "needs_review" },
+  { id: generateId(), date: "2026-02-05", merchant: "LinkedIn Premium", amount: 59.99, category: "Marketing", cardLast4: "3092", recurring: true, receipt: true, notes: "Business networking", status: "categorized" },
+];
+
 const sampleInquiries = [
   { id: generateId(), name: "Johnson Wedding", contact: "Sarah Johnson", email: "sarah@email.com", phone: "555-0101", phase: "new", grade: "A", date: "2026-06-15", value: 8500, notes: "200 guests, outdoor venue", nextSteps: "Send portfolio and pricing guide" },
   { id: generateId(), name: "Tech Summit 2026", contact: "Mike Chen", email: "mike@techsummit.com", phone: "555-0202", phase: "proposal", grade: "B", date: "2026-09-20", value: 15000, notes: "Corporate event, 500 attendees", nextSteps: "Follow up on proposal by Friday" },
@@ -145,6 +168,10 @@ const Icon = ({ name, size = 18 }) => {
     sync: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M23 4v6h-6M1 20v-6h6"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>,
     trash: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg>,
     star: <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>,
+    receipt: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 2v20l3-2 3 2 3-2 3 2 3-2 3 2V2l-3 2-3-2-3 2-3-2-3 2-3-2z"/><path d="M8 8h8M8 12h8M8 16h4"/></svg>,
+    creditcard: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/><path d="M6 16h4m4 0h4"/></svg>,
+    repeat: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>,
+    piechart: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M21.21 15.89A10 10 0 118 2.83"/><path d="M22 12A10 10 0 0012 2v10z"/></svg>,
   };
   return icons[name] || null;
 };
@@ -216,7 +243,7 @@ const Select = ({ label, value, onChange, options, style = {} }) => (
     {label && <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>{label}</label>}
     <select value={value} onChange={e => onChange(e.target.value)}
       style={{ width: "100%", boxSizing: "border-box", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "10px 12px", color: "#f0f0f0", fontSize: 14, fontFamily: "inherit", outline: "none", appearance: "none" }}>
-      {options.map(o => <option key={typeof o === "string" ? o : o.value} value={typeof o === "string" ? o : o.value}>{typeof o === "string" ? o : o.label}</option>)}
+      {options.map(o => <option key={typeof o === "string" ? o : o.value} value={typeof o === "string" ? o : o.value} style={{ background: "#1e1e2e", color: "#f0f0f0" }}>{typeof o === "string" ? o : o.label}</option>)}
     </select>
   </div>
 );
@@ -261,6 +288,17 @@ const Table = ({ columns, data, onRowClick }) => (
 const formatCurrency = (n) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
 
 const formatDate = (d) => d ? new Date(d + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "";
+
+const loadState = (key, fallback) => {
+  try {
+    const saved = localStorage.getItem(key);
+    return saved ? JSON.parse(saved) : fallback;
+  } catch { return fallback; }
+};
+
+const saveState = (key, value) => {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+};
 
 // ═══════════════════════════════════════════════════════
 // SECTION: DASHBOARD
@@ -580,7 +618,7 @@ const TaxManagement = ({ transactions }) => {
 // SECTION: BANKING / EXPENSES
 // ═══════════════════════════════════════════════════════
 
-const Banking = ({ transactions, setTransactions }) => {
+const Banking = ({ transactions, setTransactions, expenseCategories = DEFAULT_EXPENSE_CATEGORIES }) => {
   const [filter, setFilter] = useState("all");
   const [searchQ, setSearchQ] = useState("");
   const [editingTx, setEditingTx] = useState(null);
@@ -670,12 +708,1401 @@ const Banking = ({ transactions, setTransactions }) => {
       <Modal isOpen={editingTx !== null} onClose={() => setEditingTx(null)} title="Categorize Transaction" width="400px">
         <p style={{ color: "#888", fontSize: 13, marginBottom: 16 }}>Select a category for this transaction:</p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          {EXPENSE_CATEGORIES.filter(c => c !== "Unknown").map(cat => (
+          {expenseCategories.filter(c => c !== "Unknown").map(cat => (
             <button key={cat} onClick={() => handleCategorize(editingTx, cat)}
               style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.08)", background: "rgba(255,255,255,0.03)", color: "#ccc", fontSize: 13, cursor: "pointer", textAlign: "left", fontFamily: "inherit" }}>
               {cat}
             </button>
           ))}
+        </div>
+      </Modal>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════
+// SECTION: EXPENSES
+// ═══════════════════════════════════════════════════════
+
+const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets, setBudgets, categoryRules, setCategoryRules, expenseCategories, customCategories, setCustomCategories }) => {
+  const [subTab, setSubTab] = useState("feed");
+  const [cardFilter, setCardFilter] = useState("all");
+  const [catFilter, setCatFilter] = useState("all");
+  const [searchQ, setSearchQ] = useState("");
+  const [editingExpense, setEditingExpense] = useState(null);
+  const [editCategory, setEditCategory] = useState("");
+  const [editNotes, setEditNotes] = useState("");
+  const [editReceipt, setEditReceipt] = useState(null);
+  const [applyToAll, setApplyToAll] = useState(false);
+  const [showConnectModal, setShowConnectModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportMonth, setExportMonth] = useState(() => new Date().toISOString().slice(0, 7));
+  // Add expense
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newDate, setNewDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [newMerchant, setNewMerchant] = useState("");
+  const [newAmount, setNewAmount] = useState("");
+  const [newCategory, setNewCategory] = useState("Unknown");
+  const [newCard, setNewCard] = useState("");
+  const [newRecurring, setNewRecurring] = useState(false);
+  const [newNotes, setNewNotes] = useState("");
+  // CSV Import
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importMode, setImportMode] = useState("choose"); // "choose" | "csv" | "pdf"
+  const [csvData, setCsvData] = useState([]);
+  const [csvColumns, setCsvColumns] = useState([]);
+  const [csvMapping, setCsvMapping] = useState({ date: "", merchant: "", amount: "", category: "" });
+  const [csvCard, setCsvCard] = useState("");
+  // PDF Import (supports multiple files)
+  const [pdfParsing, setPdfParsing] = useState(false);
+  const [pdfParsed, setPdfParsed] = useState([]);
+  const [pdfCard, setPdfCard] = useState("");
+  const [pdfError, setPdfError] = useState("");
+  const [pdfFileNames, setPdfFileNames] = useState([]);
+  const [pdfExcluded, setPdfExcluded] = useState(new Set());
+  // Bulk select
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  // Manual card add
+  const [manualBrand, setManualBrand] = useState("");
+  const [manualLast4, setManualLast4] = useState("");
+  const [manualColor, setManualColor] = useState("#6366f1");
+  // Budget
+  const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [budgetCat, setBudgetCat] = useState("");
+  const [budgetAmt, setBudgetAmt] = useState("");
+  // Plaid
+  const [plaidAvailable, setPlaidAvailable] = useState(false);
+  const [plaidStatus, setPlaidStatus] = useState("");
+  const receiptInputRef = useRef(null);
+
+  // Plaid check on mount
+  useEffect(() => {
+    fetch("/api/plaid/status").then(r => { if (r.ok) setPlaidAvailable(true); }).catch(() => {});
+  }, []);
+
+  // Stats - dynamic month
+  const currentMonth = new Date().toISOString().slice(0, 7);
+  const thisMonth = expenses.filter(e => e.date.startsWith(currentMonth));
+  const monthTotal = thisMonth.reduce((s, e) => s + e.amount, 0);
+  const recurringExpenses = expenses.filter(e => e.recurring);
+  const recurringTotal = recurringExpenses.reduce((s, e) => s + e.amount, 0);
+  const needsReview = expenses.filter(e => e.status === "needs_review").length;
+  const now = new Date();
+  const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+  const daysSoFar = Math.max(now.getDate(), 1);
+  const dailyAvg = monthTotal / daysSoFar;
+
+  // Filtered expenses
+  const filtered = expenses.filter(e => {
+    if (cardFilter !== "all" && e.cardLast4 !== cardFilter) return false;
+    if (catFilter !== "all" && e.category !== catFilter) return false;
+    if (searchQ && !e.merchant.toLowerCase().includes(searchQ.toLowerCase())) return false;
+    return true;
+  });
+
+  // Categories in use
+  const usedCategories = [...new Set(expenses.map(e => e.category))].sort();
+
+  // Spending by category
+  const spendingByCategory = _.groupBy(expenses, "category");
+  const categoryTotals = Object.entries(spendingByCategory).map(([cat, items]) => ({
+    category: cat,
+    total: items.reduce((s, e) => s + e.amount, 0),
+    count: items.length,
+  })).sort((a, b) => b.total - a.total);
+  const maxCategoryTotal = categoryTotals[0]?.total || 1;
+
+  // Spending by card
+  const spendingByCard = _.groupBy(expenses, "cardLast4");
+  const cardTotals = Object.entries(spendingByCard).map(([last4, items]) => ({
+    last4,
+    card: creditCards.find(c => c.last4 === last4),
+    total: items.reduce((s, e) => s + e.amount, 0),
+    count: items.length,
+  }));
+
+  // Top merchants
+  const merchantGroups = _.groupBy(expenses, "merchant");
+  const topMerchants = Object.entries(merchantGroups).map(([m, items]) => ({
+    merchant: m,
+    total: items.reduce((s, e) => s + e.amount, 0),
+    count: items.length,
+  })).sort((a, b) => b.total - a.total).slice(0, 5);
+
+  // ── Expense Detail ──
+  const openExpenseDetail = (exp) => {
+    setEditingExpense(exp);
+    setEditCategory(exp.category);
+    setEditNotes(exp.notes || "");
+    setEditReceipt(exp.receipt || null);
+    setApplyToAll(false);
+  };
+
+  const handleCustomCategory = (currentValue, setter) => {
+    const name = prompt("Enter new category name:")?.trim();
+    if (!name) { setter(currentValue); return; }
+    if (expenseCategories.includes(name)) { setter(name); return; }
+    setCustomCategories(prev => [...prev, name]);
+    setter(name);
+  };
+
+  const applyRuleNow = (cat) => {
+    if (!editingExpense || cat === "Unknown") return;
+    const merchantKey = editingExpense.merchant.toLowerCase().trim();
+    setExpenses(prev => prev.map(e => {
+      if (e.id === editingExpense.id) return e;
+      if (e.merchant.toLowerCase().trim() === merchantKey) {
+        return { ...e, category: cat, status: "categorized" };
+      }
+      return e;
+    }));
+    setCategoryRules(prev => ({ ...prev, [merchantKey]: cat }));
+  };
+
+  const saveExpenseDetail = () => {
+    setExpenses(prev => prev.map(e => e.id === editingExpense.id ? {
+      ...e, category: editCategory, notes: editNotes, receipt: editReceipt,
+      status: editCategory !== "Unknown" ? "categorized" : "needs_review"
+    } : e));
+    setEditingExpense(null);
+  };
+
+  const handleReceiptUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) { alert("Receipt too large (max 5MB)"); return; }
+    const reader = new FileReader();
+    reader.onload = (evt) => setEditReceipt(evt.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  // ── Add Expense ──
+  const handleAddExpense = () => {
+    if (!newMerchant || !newAmount) return;
+    setExpenses(prev => [{
+      id: generateId(), date: newDate, merchant: newMerchant,
+      amount: Math.abs(parseFloat(newAmount) || 0),
+      category: newCategory, cardLast4: newCard || "manual",
+      recurring: newRecurring, receipt: null, notes: newNotes,
+      status: newCategory !== "Unknown" ? "categorized" : "needs_review",
+    }, ...prev]);
+    setShowAddModal(false);
+    setNewMerchant(""); setNewAmount(""); setNewCategory("Unknown");
+    setNewCard(""); setNewRecurring(false); setNewNotes("");
+    setNewDate(new Date().toISOString().split("T")[0]);
+  };
+
+  // ── Delete ──
+  const deleteExpense = (id) => {
+    setExpenses(prev => prev.filter(e => e.id !== id));
+    setEditingExpense(null);
+  };
+
+  const bulkDelete = () => {
+    if (!window.confirm(`Delete ${selectedIds.size} expense(s)?`)) return;
+    setExpenses(prev => prev.filter(e => !selectedIds.has(e.id)));
+    setSelectedIds(new Set());
+  };
+
+  const toggleSelect = (id, e) => {
+    e?.stopPropagation();
+    setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds(prev => prev.size === filtered.length ? new Set() : new Set(filtered.map(e => e.id)));
+  };
+
+  // ── CSV Import ──
+  const parseCSV = (text) => {
+    const lines = [];
+    let cur = "", inQ = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (ch === '"') inQ = !inQ;
+      else if ((ch === '\n' || ch === '\r') && !inQ) { if (cur.trim()) lines.push(cur); cur = ""; }
+      else cur += ch;
+    }
+    if (cur.trim()) lines.push(cur);
+    return lines.map(line => {
+      const fields = []; let f = "", q = false;
+      for (let i = 0; i < line.length; i++) {
+        const c = line[i];
+        if (c === '"') q = !q;
+        else if (c === ',' && !q) { fields.push(f.trim()); f = ""; }
+        else f += c;
+      }
+      fields.push(f.trim());
+      return fields;
+    });
+  };
+
+  const handleCSVFile = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      const parsed = parseCSV(evt.target.result);
+      if (parsed.length < 2) return;
+      const headers = parsed[0];
+      const rows = parsed.slice(1).filter(r => r.length >= 2);
+      setCsvColumns(headers);
+      setCsvData(rows);
+      // Auto-detect column mapping
+      const m = { date: "", merchant: "", amount: "", category: "" };
+      headers.forEach((h, i) => {
+        const lh = h.toLowerCase();
+        if ((lh.includes("date") || lh === "posting date" || lh === "trans date") && !m.date) m.date = String(i);
+        if ((lh.includes("description") || lh.includes("merchant") || lh.includes("name") || lh === "memo") && !m.merchant) m.merchant = String(i);
+        if ((lh.includes("amount") || lh.includes("total") || lh === "debit") && !m.amount) m.amount = String(i);
+        if ((lh.includes("category") || lh.includes("type")) && !m.category) m.category = String(i);
+      });
+      setCsvMapping(m);
+    };
+    reader.readAsText(file);
+  };
+
+  const normalizeDate = (raw) => {
+    if (!raw) return new Date().toISOString().split("T")[0];
+    // Handle MM/DD/YYYY or MM-DD-YYYY
+    const slashMatch = raw.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+    if (slashMatch) {
+      const yr = slashMatch[3].length === 2 ? "20" + slashMatch[3] : slashMatch[3];
+      return `${yr}-${slashMatch[1].padStart(2, "0")}-${slashMatch[2].padStart(2, "0")}`;
+    }
+    // Handle YYYY-MM-DD already
+    if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+    // Try native parse
+    const d = new Date(raw);
+    return isNaN(d) ? new Date().toISOString().split("T")[0] : d.toISOString().split("T")[0];
+  };
+
+  const handleImportCSV = () => {
+    const card = csvCard || creditCards[0]?.last4 || "manual";
+    const imported = csvData.map(row => {
+      const rawAmt = row[parseInt(csvMapping.amount)] || "0";
+      const amount = Math.abs(parseFloat(rawAmt.replace(/[^0-9.\-]/g, "")) || 0);
+      if (amount === 0) return null;
+      const merchant = row[parseInt(csvMapping.merchant)] || "Unknown Merchant";
+      const csvCat = csvMapping.category ? (row[parseInt(csvMapping.category)] || "Unknown") : "Unknown";
+      const ruleCat = categoryRules[merchant.toLowerCase()];
+      const category = csvCat !== "Unknown" ? csvCat : (ruleCat || "Unknown");
+      return {
+        id: generateId(),
+        date: normalizeDate(row[parseInt(csvMapping.date)]),
+        merchant, amount, category,
+        cardLast4: card,
+        recurring: false, receipt: null, notes: "Imported from CSV",
+        status: category !== "Unknown" ? "categorized" : "needs_review",
+      };
+    }).filter(Boolean);
+    setExpenses(prev => [...imported, ...prev]);
+    setShowImportModal(false); setImportMode("choose");
+    setCsvData([]); setCsvColumns([]); setCsvMapping({ date: "", merchant: "", amount: "", category: "" });
+  };
+
+  // ── PDF Import ──
+  const loadPdfJs = async () => {
+    if (window.pdfjsLib) return window.pdfjsLib;
+    return new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+      s.onload = () => {
+        window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+          "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+        resolve(window.pdfjsLib);
+      };
+      s.onerror = () => reject(new Error("Failed to load PDF.js"));
+      document.head.appendChild(s);
+    });
+  };
+
+  const extractPdfText = async (file) => {
+    const lib = await loadPdfJs();
+    const arrayBuffer = await file.arrayBuffer();
+    const pdf = await lib.getDocument({ data: arrayBuffer }).promise;
+    const pages = [];
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const content = await page.getTextContent();
+      // Group text items by Y position to reconstruct lines
+      const items = content.items.filter(it => it.str.trim());
+      const lineMap = {};
+      items.forEach(it => {
+        // Round Y to group items on the same line (within 2px tolerance)
+        const y = Math.round(it.transform[5] / 2) * 2;
+        if (!lineMap[y]) lineMap[y] = [];
+        lineMap[y].push({ text: it.str, x: it.transform[4] });
+      });
+      // Sort lines top-to-bottom (higher Y = higher on page), items left-to-right
+      const sortedYs = Object.keys(lineMap).map(Number).sort((a, b) => b - a);
+      sortedYs.forEach(y => {
+        const lineItems = lineMap[y].sort((a, b) => a.x - b.x);
+        const lineText = lineItems.map(it => it.text).join("  ").trim();
+        if (lineText) pages.push(lineText);
+      });
+    }
+    return pages;
+  };
+
+  const parseStatementLines = (lines) => {
+    // ── Step 1: Detect statement year/period from metadata ──
+    let openMonth = null, openYear = null, closeMonth = null, closeYear = null;
+    for (const line of lines) {
+      // "Opening/Closing Date  01/05/25 - 02/04/25" or similar period lines
+      const periodMatch = line.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s*[-–—to]+\s*(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+      if (periodMatch) {
+        openMonth = parseInt(periodMatch[1]);
+        openYear = periodMatch[3].length === 2 ? 2000 + parseInt(periodMatch[3]) : parseInt(periodMatch[3]);
+        closeMonth = parseInt(periodMatch[4]);
+        closeYear = periodMatch[6].length === 2 ? 2000 + parseInt(periodMatch[6]) : parseInt(periodMatch[6]);
+        break;
+      }
+      // "Statement Date: 02/04/25" or "Statement Date  02/04/25"
+      const stmtMatch = line.match(/statement\s*date[:\s]+(\d{1,2})\/(\d{1,2})\/(\d{2,4})/i);
+      if (stmtMatch) {
+        closeMonth = parseInt(stmtMatch[1]);
+        closeYear = stmtMatch[3].length === 2 ? 2000 + parseInt(stmtMatch[3]) : parseInt(stmtMatch[3]);
+        break;
+      }
+    }
+    // Fallback: look for "Month YYYY" like "January 2025" or "March 2025"
+    if (!closeYear) {
+      const monthNames = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
+      for (const line of lines) {
+        const m = line.match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/i);
+        if (m) { closeYear = parseInt(m[2]); closeMonth = monthNames[m[1].slice(0,3).toLowerCase()]; break; }
+      }
+    }
+    // Fallback: look for embedded date like "25/02/04" (YY/MM/DD) common in Chase footers
+    if (!closeYear) {
+      for (const line of lines) {
+        const m = line.match(/(\d{2})\/(\d{2})\/(\d{2})\s+Page\s+\d/);
+        if (m) { closeYear = 2000 + parseInt(m[1]); closeMonth = parseInt(m[2]); break; }
+      }
+    }
+    if (!closeYear) closeYear = new Date().getFullYear();
+    if (!openYear) openYear = closeYear;
+
+    // Determine the correct year for a given transaction month
+    const getYearForMonth = (txMonth) => {
+      // Cross-year statement (e.g., Dec 2024 → Jan 2025)
+      if (openMonth && closeMonth && openMonth > closeMonth) {
+        return txMonth >= openMonth ? openYear : closeYear;
+      }
+      // Same-year statement — but handle edge case: if openYear < closeYear
+      // (e.g., statement opened in Dec 2024, closes Jan 2025)
+      if (openYear && closeYear && openYear < closeYear) {
+        return txMonth >= (openMonth || 1) ? openYear : closeYear;
+      }
+      return closeYear;
+    };
+
+    // ── Step 2: Parse transaction lines ──
+    const transactions = [];
+    const datePatterns = [
+      { re: /^(\d{1,2}\/\d{1,2}\/\d{2,4})/, hasYear: true },    // MM/DD/YYYY or MM/DD/YY
+      { re: /^(\d{1,2}\/\d{1,2})\s/, hasYear: false },            // MM/DD (no year)
+      { re: /^(\d{1,2}-\d{1,2}-\d{2,4})/, hasYear: true },        // MM-DD-YYYY
+      { re: /^(\w{3}\s+\d{1,2},?\s*\d{4})/, hasYear: true },      // Jan 15, 2025
+      { re: /^(\d{4}-\d{2}-\d{2})/, hasYear: true },               // YYYY-MM-DD
+    ];
+    const amountPattern = /[-−]?\$?\s*[\d,]+\.\d{2}/g;
+    const skipPatterns = [
+      /account\s*(number|summary)|page\s+\d+\s+of/i,
+      /^(balance|total|subtotal|minimum|payment\s+due|credit\s+limit|available|previous|new\s+balance)/i,
+      /^(date\s+of|trans\s+date|post\s+date|description|reference|merchant\s+name|amount|\$\s*amount|debit|details)\s/i,
+      /customer\s+service|cardmember|member\s+since|reward|points?\s+(balance|available|earned)/i,
+      /opening\/closing|statement\s*date|annual\s+percentage|interest\s+charge|billing\s+period/i,
+      /year-to-date|totals?\s+year|fees?\s+charged\s+in/i,
+      /^PAYMENTS\s+AND|^PURCHASE\s*$|^ACCOUNT\s+ACTIVITY/i,
+    ];
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      if (line.length < 8 || skipPatterns.some(p => p.test(line))) continue;
+
+      // Try to match a date at the start of the line
+      let dateStr = null;
+      let dateEnd = 0;
+      let dateHasYear = false;
+      for (const dp of datePatterns) {
+        const m = line.match(dp.re);
+        if (m) {
+          dateStr = m[1];
+          dateEnd = m.index + m[0].length;
+          dateHasYear = dp.hasYear;
+          break;
+        }
+      }
+      if (!dateStr) continue;
+
+      // Build full date with year
+      let fullDateStr = dateStr;
+      if (!dateHasYear) {
+        // dateStr is "MM/DD" — attach the correct year
+        const txMonth = parseInt(dateStr.split("/")[0]);
+        const yr = getYearForMonth(txMonth);
+        fullDateStr = `${dateStr}/${yr}`;
+      }
+
+      // Find all dollar amounts on the line — take the last one
+      const amounts = [];
+      let am;
+      while ((am = amountPattern.exec(line)) !== null) {
+        amounts.push({ value: am[0], index: am.index });
+      }
+      amountPattern.lastIndex = 0;
+      if (amounts.length === 0) continue;
+
+      const lastAmt = amounts[amounts.length - 1];
+      const rawAmt = lastAmt.value.replace(/[−]/g, "-").replace(/[$,\s]/g, "");
+      const amount = parseFloat(rawAmt);
+      if (isNaN(amount) || amount === 0) continue;
+
+      // Description: everything between the date and the last amount
+      let desc = line.substring(dateEnd, lastAmt.index).trim();
+
+      // Skip post date if present (second date right after first)
+      const postDateMatch = desc.match(/^\s*\d{1,2}\/\d{1,2}(?:\/\d{2,4})?\s*/);
+      if (postDateMatch) desc = desc.substring(postDateMatch[0].length).trim();
+
+      // Clean description
+      desc = desc.replace(/^\d{4,}\s+/, "").replace(/\s{2,}/g, " ").trim();
+
+      if (!desc || desc.length < 2) continue;
+      if (Math.abs(amount) > 100000) continue;
+
+      transactions.push({
+        id: generateId(),
+        date: normalizeDate(fullDateStr),
+        merchant: desc,
+        amount: Math.abs(amount),
+        isCredit: amount < 0 || /payment|credit|refund/i.test(desc),
+      });
+    }
+    return transactions;
+  };
+
+  const handlePdfFile = async (e, append = false) => {
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    setPdfError(""); setPdfParsing(true);
+    if (!append) { setPdfParsed([]); setPdfFileNames([]); setPdfExcluded(new Set()); }
+    const errors = [];
+    const allTransactions = append ? [...pdfParsed] : [];
+    const allNames = append ? [...pdfFileNames] : [];
+    for (const file of files) {
+      try {
+        const lines = await extractPdfText(file);
+        if (lines.length === 0) { errors.push(`${file.name}: No text found (may be scanned/image-based)`); continue; }
+        const transactions = parseStatementLines(lines);
+        if (transactions.length === 0) { errors.push(`${file.name}: No transactions detected`); continue; }
+        transactions.forEach(t => t.source = file.name);
+        allTransactions.push(...transactions);
+        allNames.push(file.name);
+      } catch (err) {
+        errors.push(`${file.name}: ${err.message || "Failed to parse"}`);
+      }
+    }
+    if (allTransactions.length > 0) {
+      setPdfParsed(allTransactions);
+      setPdfFileNames(allNames);
+      setImportMode("pdf");
+    }
+    if (errors.length > 0) setPdfError(errors.join("\n"));
+    setPdfParsing(false);
+    e.target.value = "";
+  };
+
+  const togglePdfRow = (id) => {
+    setPdfExcluded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  };
+
+  const handleImportPdf = () => {
+    const card = pdfCard || creditCards[0]?.last4 || "manual";
+    const toImport = pdfParsed
+      .filter(t => !pdfExcluded.has(t.id) && !t.isCredit)
+      .map(t => {
+        const ruleCat = categoryRules[t.merchant.toLowerCase()];
+        const category = ruleCat || "Unknown";
+        return {
+          id: generateId(), date: t.date, merchant: t.merchant, amount: t.amount,
+          category, cardLast4: card, recurring: false, receipt: null,
+          notes: `Imported from ${t.source || pdfFileNames.join(", ")}`,
+          status: category !== "Unknown" ? "categorized" : "needs_review",
+        };
+      });
+    setExpenses(prev => [...toImport, ...prev]);
+    setShowImportModal(false); setImportMode("choose");
+    setPdfParsed([]); setPdfFileNames([]);
+  };
+
+  // ── Export CSV ──
+  const handleExportCSV = () => {
+    const monthExpenses = expenses.filter(e => e.date.startsWith(exportMonth));
+    const header = "Date,Merchant,Amount,Category,Card,Recurring,Notes,Status";
+    const rows = monthExpenses.map(e =>
+      `${e.date},"${e.merchant}",${e.amount},"${e.category}","****${e.cardLast4}",${e.recurring},"${e.notes || ""}","${e.status}"`
+    );
+    const csv = [header, ...rows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `expenses-${exportMonth}.csv`; a.click();
+    URL.revokeObjectURL(url);
+    setShowExportModal(false);
+  };
+
+  // ── Card Management ──
+  const handleAddCardManual = () => {
+    if (!manualBrand || !manualLast4 || manualLast4.length !== 4) return;
+    setCreditCards(prev => [...prev, {
+      id: generateId(), brand: manualBrand, last4: manualLast4, color: manualColor,
+      status: "connected", balance: 0, limit: 0, lastSync: null,
+    }]);
+    setShowConnectModal(false);
+    setManualBrand(""); setManualLast4(""); setManualColor("#6366f1");
+  };
+
+  const deleteCard = (id) => {
+    if (!window.confirm("Remove this card? Expenses linked to it will remain.")) return;
+    setCreditCards(prev => prev.filter(c => c.id !== id));
+  };
+
+  const disconnectCard = (id) => {
+    setCreditCards(prev => prev.map(c => c.id === id ? { ...c, status: "disconnected" } : c));
+  };
+
+  const reconnectCard = (id) => {
+    setCreditCards(prev => prev.map(c => c.id === id ? { ...c, status: "connected", lastSync: new Date().toISOString() } : c));
+  };
+
+  // ── Plaid Integration ──
+  const initPlaid = async () => {
+    try {
+      setPlaidStatus("loading");
+      const res = await fetch("/api/plaid/create-link-token", { method: "POST" });
+      if (!res.ok) throw new Error("Server error");
+      const { link_token } = await res.json();
+      if (!window.Plaid) {
+        // Dynamically load Plaid Link script
+        await new Promise((resolve, reject) => {
+          const s = document.createElement("script");
+          s.src = "https://cdn.plaid.com/link/v2/stable/link-initialize.js";
+          s.onload = resolve; s.onerror = reject;
+          document.head.appendChild(s);
+        });
+      }
+      const handler = window.Plaid.create({
+        token: link_token,
+        onSuccess: async (publicToken, metadata) => {
+          setPlaidStatus("syncing");
+          const exRes = await fetch("/api/plaid/exchange-token", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ public_token: publicToken }),
+          });
+          const exData = await exRes.json();
+          metadata.accounts.forEach(acct => {
+            setCreditCards(prev => [...prev, {
+              id: generateId(), brand: `${metadata.institution.name} — ${acct.name}`,
+              last4: acct.mask, color: "#1a73e8", status: "connected", balance: 0, limit: 0,
+              lastSync: new Date().toISOString(), plaidAccessToken: exData.access_token,
+            }]);
+          });
+          // Fetch transactions
+          const txRes = await fetch("/api/plaid/transactions", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ access_token: exData.access_token }),
+          });
+          const txData = await txRes.json();
+          if (txData.transactions) {
+            const newExp = txData.transactions.map(tx => ({
+              id: generateId(), date: tx.date,
+              merchant: tx.name || tx.merchant_name || "Unknown",
+              amount: Math.abs(tx.amount),
+              category: expenseCategories.includes(tx.category?.[0]) ? tx.category[0] : "Unknown",
+              cardLast4: metadata.accounts.find(a => a.account_id === tx.account_id)?.mask || "0000",
+              recurring: false, receipt: null, notes: "", status: "needs_review",
+            }));
+            setExpenses(prev => [...newExp, ...prev]);
+          }
+          setPlaidStatus("done");
+          setShowConnectModal(false);
+        },
+        onExit: () => setPlaidStatus(""),
+      });
+      handler.open();
+    } catch (err) {
+      console.error("Plaid error:", err);
+      setPlaidStatus("error");
+    }
+  };
+
+  // ── Budget ──
+  const saveBudget = () => {
+    if (!budgetCat || !budgetAmt) return;
+    setBudgets(prev => ({ ...prev, [budgetCat]: parseFloat(budgetAmt) || 0 }));
+    setBudgetCat(""); setBudgetAmt("");
+  };
+
+  const removeBudget = (cat) => {
+    setBudgets(prev => { const n = { ...prev }; delete n[cat]; return n; });
+  };
+
+  const SUB_TABS = [
+    { id: "feed", label: "Expense Feed", icon: "receipt" },
+    { id: "cards", label: "Credit Cards", icon: "creditcard" },
+    { id: "analysis", label: "Spending Analysis", icon: "piechart" },
+    { id: "recurring", label: "Recurring", icon: "repeat" },
+  ];
+
+  const categoryColors = {
+    "Software & Tools": "#6366f1", "Office Supplies": "#f59e0b", "Travel": "#3b82f6",
+    "Marketing": "#ec4899", "Meals & Entertainment": "#10b981", "Subscriptions": "#8b5cf6",
+    "Unknown": "#ef4444", "Insurance": "#06b6d4", "Professional Services": "#f97316",
+    "Equipment": "#84cc16", "Rent & Utilities": "#14b8a6", "Payroll": "#a855f7",
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div>
+          <h1 style={{ fontSize: 28, fontWeight: 700, color: "#f0f0f0", marginBottom: 4 }}>Expenses</h1>
+          <p style={{ color: "#888", fontSize: 14 }}>Track and categorize credit card expenses</p>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Btn variant="secondary" icon="download" onClick={() => setShowExportModal(true)}>Export</Btn>
+          <Btn variant="secondary" icon="sync" onClick={() => { setShowImportModal(true); setImportMode("choose"); }}>Import</Btn>
+          <Btn variant="success" icon="plus" onClick={() => setShowAddModal(true)}>Add Expense</Btn>
+          <Btn icon="creditcard" onClick={() => setShowConnectModal(true)}>Add Card</Btn>
+        </div>
+      </div>
+
+      {/* Stat Cards */}
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 24 }}>
+        <StatCard label="This Month" value={formatCurrency(monthTotal)} sub={`${thisMonth.length} transactions`} accent="#6366f1" icon="receipt" />
+        <StatCard label="Recurring" value={formatCurrency(recurringTotal)} sub={`${recurringExpenses.length} subscriptions`} accent="#8b5cf6" icon="repeat" />
+        <StatCard label="Needs Review" value={needsReview} sub="Uncategorized" accent="#ef4444" icon="alert" />
+        <StatCard label="Daily Average" value={formatCurrency(dailyAvg)} sub="This month" accent="#10b981" icon="dollar" />
+      </div>
+
+      {/* Sub-tabs */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 24, borderBottom: "1px solid rgba(255,255,255,0.06)", paddingBottom: 0 }}>
+        {SUB_TABS.map(tab => (
+          <button key={tab.id} onClick={() => setSubTab(tab.id)}
+            style={{
+              padding: "10px 16px", border: "none", borderBottom: subTab === tab.id ? "2px solid #6366f1" : "2px solid transparent",
+              background: "transparent", color: subTab === tab.id ? "#6366f1" : "#888", fontSize: 13, fontWeight: 600,
+              cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, transition: "all 0.15s",
+            }}>
+            <Icon name={tab.icon} size={14} />{tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ─── Expense Feed ─── */}
+      {subTab === "feed" && (
+        <div>
+          <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
+            <div style={{ position: "relative", flex: 1, maxWidth: 300 }}>
+              <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Search expenses..."
+                style={{ width: "100%", boxSizing: "border-box", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "8px 12px 8px 34px", color: "#f0f0f0", fontSize: 13, fontFamily: "inherit", outline: "none" }} />
+              <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#666" }}><Icon name="search" size={14} /></span>
+            </div>
+            <Select label="" value={cardFilter} onChange={setCardFilter}
+              options={[{ value: "all", label: "All Cards" }, { value: "manual", label: "Manual" }, ...creditCards.map(c => ({ value: c.last4, label: `${c.brand} (****${c.last4})` }))]}
+              style={{ marginBottom: 0, minWidth: 140 }} />
+            <Select label="" value={catFilter} onChange={setCatFilter}
+              options={[{ value: "all", label: "All Categories" }, ...usedCategories.map(c => ({ value: c, label: c }))]}
+              style={{ marginBottom: 0, minWidth: 160 }} />
+            {selectedIds.size > 0 && (
+              <Btn variant="danger" icon="trash" onClick={bulkDelete}>{selectedIds.size} Selected — Delete</Btn>
+            )}
+          </div>
+
+          <Table
+            columns={[
+              { key: "select", label: "", render: r => (
+                <input type="checkbox" checked={selectedIds.has(r.id)} onChange={(e) => toggleSelect(r.id, e)}
+                  style={{ width: 15, height: 15, accentColor: "#6366f1", cursor: "pointer" }} />
+              )},
+              { key: "date", label: "Date", render: r => formatDate(r.date) },
+              { key: "merchant", label: "Merchant", render: r => (
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span>{r.merchant}</span>
+                  {r.recurring && <Badge color="#8b5cf6" style={{ fontSize: 9 }}>Recurring</Badge>}
+                </div>
+              )},
+              { key: "category", label: "Category", render: r => (
+                <Badge color={categoryColors[r.category] || "#888"}>{r.category}</Badge>
+              )},
+              { key: "card", label: "Card", render: r => <span style={{ fontSize: 12, color: "#888", fontFamily: "'JetBrains Mono', monospace" }}>{r.cardLast4 === "manual" ? "Manual" : `****${r.cardLast4}`}</span> },
+              { key: "receipt", label: "Receipt", align: "center", render: r => r.receipt ? <span style={{ color: "#10b981", fontSize: 16 }}>✓</span> : <span style={{ color: "#666" }}>–</span> },
+              { key: "amount", label: "Amount", align: "right", render: r => (
+                <span style={{ color: "#ef4444", fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>
+                  -{formatCurrency(r.amount)}
+                </span>
+              )},
+              { key: "status", label: "Status", align: "center", render: r => (
+                <Badge color={r.status === "needs_review" ? "#ef4444" : "#10b981"}>
+                  {r.status === "needs_review" ? "Review" : "Done"}
+                </Badge>
+              )},
+            ]}
+            data={filtered}
+            onRowClick={openExpenseDetail}
+          />
+          {filtered.length > 0 && (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12, fontSize: 12, color: "#666" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                <input type="checkbox" checked={selectedIds.size === filtered.length && filtered.length > 0}
+                  onChange={toggleSelectAll} style={{ accentColor: "#6366f1" }} />
+                Select all ({filtered.length})
+              </label>
+              <span>Total: <strong style={{ color: "#ef4444" }}>-{formatCurrency(filtered.reduce((s, e) => s + e.amount, 0))}</strong></span>
+            </div>
+          )}
+          {filtered.length === 0 && (
+            <div style={{ textAlign: "center", padding: 40, color: "#666" }}>
+              {expenses.length === 0 ? "No expenses yet. Add one manually or import a CSV." : "No expenses match your filters."}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ─── Credit Cards ─── */}
+      {subTab === "cards" && (
+        <div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))", gap: 16 }}>
+            {creditCards.map(card => {
+              const cardExpenses = expenses.filter(e => e.cardLast4 === card.last4);
+              const cardTotal = cardExpenses.reduce((s, e) => s + e.amount, 0);
+              return (
+                <div key={card.id} style={{
+                  background: `linear-gradient(135deg, ${card.color}, ${card.color}88)`, borderRadius: 16,
+                  padding: 24, position: "relative", overflow: "hidden", minHeight: 180,
+                }}>
+                  <div style={{ position: "absolute", top: -20, right: -20, width: 100, height: 100, borderRadius: "50%", background: "rgba(255,255,255,0.08)" }} />
+                  <div style={{ position: "absolute", bottom: -30, left: -30, width: 120, height: 120, borderRadius: "50%", background: "rgba(255,255,255,0.05)" }} />
+                  <div style={{ position: "relative" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.9)", maxWidth: "70%" }}>{card.brand}</div>
+                      <Badge color={card.status === "connected" ? "#10b981" : "#ef4444"} style={{ background: "rgba(255,255,255,0.15)" }}>
+                        {card.status === "connected" ? "Active" : "Inactive"}
+                      </Badge>
+                    </div>
+                    <div style={{ fontSize: 20, fontFamily: "'JetBrains Mono', monospace", color: "#fff", letterSpacing: 3, marginBottom: 12 }}>
+                      •••• •••• •••• {card.last4}
+                    </div>
+                    <div style={{ fontSize: 12, color: "rgba(255,255,255,0.6)", marginBottom: 16 }}>
+                      {cardExpenses.length} expense{cardExpenses.length !== 1 ? "s" : ""} · Total: {formatCurrency(cardTotal)}
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {card.plaidAccessToken && card.status === "connected" && (
+                        <Btn variant="ghost" style={{ background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: 11, padding: "4px 10px" }} icon="sync">Sync</Btn>
+                      )}
+                      {card.status === "connected" ? (
+                        <Btn variant="ghost" style={{ background: "rgba(255,255,255,0.15)", color: "#fff", fontSize: 11, padding: "4px 10px" }} onClick={() => disconnectCard(card.id)}>Deactivate</Btn>
+                      ) : (
+                        <Btn variant="ghost" style={{ background: "rgba(255,255,255,0.2)", color: "#fff", fontSize: 11, padding: "4px 10px" }} onClick={() => reconnectCard(card.id)}>Reactivate</Btn>
+                      )}
+                      <Btn variant="ghost" style={{ background: "rgba(239,68,68,0.3)", color: "#fff", fontSize: 11, padding: "4px 10px" }} onClick={() => deleteCard(card.id)}>Remove</Btn>
+                    </div>
+                    {card.lastSync && <div style={{ fontSize: 10, color: "rgba(255,255,255,0.4)", marginTop: 8 }}>Last synced: {new Date(card.lastSync).toLocaleString()}</div>}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Add Card Tile */}
+            <div onClick={() => setShowConnectModal(true)} style={{
+              background: "rgba(255,255,255,0.02)", borderRadius: 16, padding: 24, minHeight: 180,
+              border: "2px dashed rgba(255,255,255,0.1)", display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "all 0.15s",
+            }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = "rgba(99,102,241,0.4)"}
+              onMouseLeave={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"}>
+              <div style={{ width: 48, height: 48, borderRadius: 12, background: "rgba(99,102,241,0.1)", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
+                <Icon name="plus" size={24} />
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 600, color: "#888" }}>Add a Card</div>
+              <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>Manually or via Plaid</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Spending Analysis ─── */}
+      {subTab === "analysis" && (
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+          {/* Category Breakdown with Budget */}
+          <div style={{ background: "#1a1d23", borderRadius: 14, padding: 24, border: "1px solid rgba(255,255,255,0.05)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <h3 style={{ fontSize: 15, fontWeight: 600, color: "#f0f0f0" }}>Spending by Category</h3>
+              <Btn variant="secondary" icon="edit" onClick={() => setShowBudgetModal(true)} style={{ fontSize: 11, padding: "4px 10px" }}>Budgets</Btn>
+            </div>
+            {categoryTotals.map(ct => {
+              const budget = budgets[ct.category];
+              const overBudget = budget && ct.total > budget;
+              return (
+                <div key={ct.category} style={{ marginBottom: 14 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <span style={{ fontSize: 13, color: overBudget ? "#ef4444" : "#ccc" }}>
+                      {ct.category} {overBudget && "⚠"}
+                    </span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "#f0f0f0", fontFamily: "'JetBrains Mono', monospace" }}>
+                      {formatCurrency(ct.total)}{budget ? ` / ${formatCurrency(budget)}` : ""}
+                    </span>
+                  </div>
+                  <div style={{ height: 6, background: "rgba(255,255,255,0.06)", borderRadius: 3, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${budget ? Math.min((ct.total / budget) * 100, 100) : (ct.total / maxCategoryTotal) * 100}%`, background: overBudget ? "#ef4444" : (categoryColors[ct.category] || "#6366f1"), borderRadius: 3, transition: "width 0.3s" }} />
+                  </div>
+                  <div style={{ fontSize: 11, color: overBudget ? "#ef4444" : "#666", marginTop: 2 }}>
+                    {ct.count} transaction{ct.count > 1 ? "s" : ""}
+                    {overBudget && ` · ${formatCurrency(ct.total - budget)} over budget`}
+                    {budget && !overBudget && ` · ${formatCurrency(budget - ct.total)} remaining`}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Top Merchants */}
+          <div style={{ background: "#1a1d23", borderRadius: 14, padding: 24, border: "1px solid rgba(255,255,255,0.05)" }}>
+            <h3 style={{ fontSize: 15, fontWeight: 600, color: "#f0f0f0", marginBottom: 20 }}>Top Merchants</h3>
+            {topMerchants.map((m, i) => (
+              <div key={m.merchant} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                <div style={{ width: 28, height: 28, borderRadius: 8, background: "rgba(99,102,241,0.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: "#6366f1" }}>
+                  {i + 1}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, color: "#f0f0f0", fontWeight: 500 }}>{m.merchant}</div>
+                  <div style={{ fontSize: 11, color: "#888" }}>{m.count} transaction{m.count > 1 ? "s" : ""}</div>
+                </div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "#f0f0f0", fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(m.total)}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Spending by Card */}
+          <div style={{ background: "#1a1d23", borderRadius: 14, padding: 24, border: "1px solid rgba(255,255,255,0.05)" }}>
+            <h3 style={{ fontSize: 15, fontWeight: 600, color: "#f0f0f0", marginBottom: 20 }}>Spending by Card</h3>
+            {cardTotals.map(ct => (
+              <div key={ct.last4} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                <div style={{ width: 40, height: 28, borderRadius: 6, background: ct.card?.color || "#666", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <Icon name="creditcard" size={16} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, color: "#f0f0f0", fontWeight: 500 }}>****{ct.last4}</div>
+                  <div style={{ fontSize: 11, color: "#888" }}>{ct.card?.brand || "Unknown Card"}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "#f0f0f0", fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(ct.total)}</div>
+                  <div style={{ fontSize: 11, color: "#888" }}>{ct.count} txns</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Monthly Trend */}
+          <div style={{ background: "#1a1d23", borderRadius: 14, padding: 24, border: "1px solid rgba(255,255,255,0.05)" }}>
+            <h3 style={{ fontSize: 15, fontWeight: 600, color: "#f0f0f0", marginBottom: 20 }}>Monthly Spending Trend</h3>
+            {(() => {
+              const weeks = [
+                { label: "Week 1 (Feb 1-7)", total: expenses.filter(e => { const d = parseInt(e.date.split("-")[2]); return d >= 1 && d <= 7; }).reduce((s, e) => s + e.amount, 0) },
+                { label: "Week 2 (Feb 8-14)", total: expenses.filter(e => { const d = parseInt(e.date.split("-")[2]); return d >= 8 && d <= 14; }).reduce((s, e) => s + e.amount, 0) },
+                { label: "Week 3 (Feb 15-21)", total: expenses.filter(e => { const d = parseInt(e.date.split("-")[2]); return d >= 15 && d <= 21; }).reduce((s, e) => s + e.amount, 0) },
+                { label: "Week 4 (Feb 22-28)", total: expenses.filter(e => { const d = parseInt(e.date.split("-")[2]); return d >= 22 && d <= 28; }).reduce((s, e) => s + e.amount, 0) },
+              ];
+              const maxWeek = Math.max(...weeks.map(w => w.total), 1);
+              return weeks.map(w => (
+                <div key={w.label} style={{ marginBottom: 12 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                    <span style={{ fontSize: 12, color: "#888" }}>{w.label}</span>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#f0f0f0", fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(w.total)}</span>
+                  </div>
+                  <div style={{ height: 8, background: "rgba(255,255,255,0.06)", borderRadius: 4, overflow: "hidden" }}>
+                    <div style={{ height: "100%", width: `${(w.total / maxWeek) * 100}%`, background: "linear-gradient(90deg, #6366f1, #8b5cf6)", borderRadius: 4 }} />
+                  </div>
+                </div>
+              ));
+            })()}
+          </div>
+        </div>
+      )}
+
+      {/* ─── Recurring ─── */}
+      {subTab === "recurring" && (() => {
+        const recur = expenses.filter(e => e.recurring);
+        const monthlyTotal = recur.reduce((s, e) => s + e.amount, 0);
+        const annualProjection = monthlyTotal * 12;
+        return (
+          <div>
+            <div style={{ display: "flex", gap: 16, marginBottom: 24 }}>
+              <div style={{ flex: 1, background: "#1a1d23", borderRadius: 14, padding: "20px 24px", border: "1px solid rgba(255,255,255,0.05)" }}>
+                <div style={{ fontSize: 12, color: "#888", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>Monthly Recurring</div>
+                <div style={{ fontSize: 28, fontWeight: 700, color: "#f0f0f0", fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(monthlyTotal)}</div>
+              </div>
+              <div style={{ flex: 1, background: "#1a1d23", borderRadius: 14, padding: "20px 24px", border: "1px solid rgba(255,255,255,0.05)" }}>
+                <div style={{ fontSize: 12, color: "#888", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>Annual Projection</div>
+                <div style={{ fontSize: 28, fontWeight: 700, color: "#f59e0b", fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(annualProjection)}</div>
+              </div>
+              <div style={{ flex: 1, background: "#1a1d23", borderRadius: 14, padding: "20px 24px", border: "1px solid rgba(255,255,255,0.05)" }}>
+                <div style={{ fontSize: 12, color: "#888", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>Active Subscriptions</div>
+                <div style={{ fontSize: 28, fontWeight: 700, color: "#8b5cf6", fontFamily: "'JetBrains Mono', monospace" }}>{recur.length}</div>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
+              {recur.map(exp => (
+                <div key={exp.id} style={{ background: "#1a1d23", borderRadius: 12, padding: 20, border: "1px solid rgba(255,255,255,0.05)" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                    <div>
+                      <div style={{ fontSize: 15, fontWeight: 600, color: "#f0f0f0" }}>{exp.merchant}</div>
+                      <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{exp.notes || exp.category}</div>
+                    </div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: "#f0f0f0", fontFamily: "'JetBrains Mono', monospace" }}>
+                      {formatCurrency(exp.amount)}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <Badge color={categoryColors[exp.category] || "#888"}>{exp.category}</Badge>
+                    <span style={{ fontSize: 11, color: "#666", fontFamily: "'JetBrains Mono', monospace" }}>****{exp.cardLast4}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: "#666", marginTop: 8 }}>
+                    Annual: {formatCurrency(exp.amount * 12)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ─── Expense Detail Modal ─── */}
+      <Modal isOpen={editingExpense !== null} onClose={() => setEditingExpense(null)} title="Expense Detail" width="520px">
+        {editingExpense && (
+          <div>
+            <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: 16, marginBottom: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 8 }}>
+                <span style={{ fontSize: 16, fontWeight: 600, color: "#f0f0f0" }}>{editingExpense.merchant}</span>
+                <span style={{ fontSize: 18, fontWeight: 700, color: "#ef4444", fontFamily: "'JetBrains Mono', monospace" }}>-{formatCurrency(editingExpense.amount)}</span>
+              </div>
+              <div style={{ display: "flex", gap: 12, fontSize: 12, color: "#888" }}>
+                <span>{formatDate(editingExpense.date)}</span>
+                <span>{editingExpense.cardLast4 === "manual" ? "Manual Entry" : `****${editingExpense.cardLast4}`}</span>
+                {editingExpense.recurring && <Badge color="#8b5cf6" style={{ fontSize: 9 }}>Recurring</Badge>}
+              </div>
+            </div>
+
+            <Select label="Category" value={editCategory} onChange={v => {
+                if (v === "__add_custom__") { handleCustomCategory(editCategory, (c) => { setEditCategory(c); if (applyToAll && c !== "Unknown") applyRuleNow(c); }); return; }
+                setEditCategory(v); if (applyToAll && v !== "Unknown") applyRuleNow(v);
+              }}
+              options={[...expenseCategories.map(c => ({ value: c, label: c })), { value: "__add_custom__", label: "+ Add Custom Category" }]} />
+
+            {editCategory !== "Unknown" && (() => {
+              const merchantKey = editingExpense.merchant.toLowerCase().trim();
+              const othersCount = expenses.filter(e => e.id !== editingExpense.id && e.merchant.toLowerCase().trim() === merchantKey).length;
+              return (
+                <label style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", marginBottom: 14, marginTop: -6, borderRadius: 8,
+                  background: applyToAll ? "rgba(99,102,241,0.08)" : "rgba(255,255,255,0.02)", border: `1px solid ${applyToAll ? "rgba(99,102,241,0.25)" : "rgba(255,255,255,0.06)"}`,
+                  cursor: "pointer", transition: "all 0.15s" }}>
+                  <input type="checkbox" checked={applyToAll} onChange={e => { setApplyToAll(e.target.checked); if (e.target.checked) applyRuleNow(editCategory); }} style={{ accentColor: "#6366f1", cursor: "pointer" }} />
+                  <span style={{ fontSize: 12, color: applyToAll ? "#c7d2fe" : "#888" }}>
+                    {othersCount > 0
+                      ? <>Apply <strong style={{ color: applyToAll ? "#a5b4fc" : "#ccc" }}>"{editCategory}"</strong> to all {othersCount} other <strong style={{ color: applyToAll ? "#a5b4fc" : "#ccc" }}>{editingExpense.merchant}</strong> expense{othersCount > 1 ? "s" : ""} + remember for future imports</>
+                      : <>Always categorize <strong style={{ color: applyToAll ? "#a5b4fc" : "#ccc" }}>{editingExpense.merchant}</strong> as <strong style={{ color: applyToAll ? "#a5b4fc" : "#ccc" }}>"{editCategory}"</strong> for future imports</>
+                    }
+                  </span>
+                </label>
+              );
+            })()}
+
+            <TextArea label="Notes" value={editNotes} onChange={setEditNotes} rows={3} placeholder="Add notes about this expense..." />
+
+            {/* Receipt Upload */}
+            <div style={{ marginBottom: 20 }}>
+              <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>Receipt</label>
+              {editReceipt ? (
+                <div style={{ position: "relative", display: "inline-block" }}>
+                  <img src={editReceipt} alt="Receipt" style={{ maxWidth: "100%", maxHeight: 200, borderRadius: 8, border: "1px solid rgba(255,255,255,0.1)" }} />
+                  <button onClick={() => setEditReceipt(null)}
+                    style={{ position: "absolute", top: 4, right: 4, background: "rgba(0,0,0,0.7)", border: "none", borderRadius: "50%", width: 24, height: 24, color: "#fff", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <Icon name="x" size={14} />
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <input ref={receiptInputRef} type="file" accept="image/*,.pdf" onChange={handleReceiptUpload} style={{ display: "none" }} />
+                  <Btn variant="secondary" icon="plus" onClick={() => receiptInputRef.current?.click()}>Upload Receipt</Btn>
+                  <span style={{ fontSize: 11, color: "#666", marginLeft: 8 }}>JPG, PNG, or PDF (max 5MB)</span>
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <Btn variant="danger" icon="trash" onClick={() => deleteExpense(editingExpense.id)}>Delete</Btn>
+              <div style={{ display: "flex", gap: 8 }}>
+                <Btn variant="secondary" onClick={() => setEditingExpense(null)}>Cancel</Btn>
+                <Btn onClick={saveExpenseDetail}>Save Changes</Btn>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* ─── Add Card Modal ─── */}
+      <Modal isOpen={showConnectModal} onClose={() => { setShowConnectModal(false); setPlaidStatus(""); }} title="Add Credit Card" width="480px">
+        <div>
+          {/* Manual Entry */}
+          <div style={{ marginBottom: 20 }}>
+            <h4 style={{ fontSize: 14, fontWeight: 600, color: "#f0f0f0", marginBottom: 12 }}>Manual Entry</h4>
+            <p style={{ color: "#888", fontSize: 12, marginBottom: 12 }}>Add a card to tag expenses against. You can import transactions via CSV.</p>
+            <Input label="Card Name" value={manualBrand} onChange={setManualBrand} placeholder="e.g. Chase Sapphire, Amex Gold" />
+            <div style={{ display: "flex", gap: 12 }}>
+              <Input label="Last 4 Digits" value={manualLast4} onChange={v => setManualLast4(v.replace(/\D/g, "").slice(0, 4))} placeholder="1234" style={{ flex: 1 }} />
+              <div style={{ marginBottom: 14 }}>
+                <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" }}>Color</label>
+                <input type="color" value={manualColor} onChange={e => setManualColor(e.target.value)}
+                  style={{ width: 44, height: 38, border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, background: "transparent", cursor: "pointer" }} />
+              </div>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+              <Btn onClick={handleAddCardManual} disabled={!manualBrand || manualLast4.length !== 4}>Add Card</Btn>
+            </div>
+          </div>
+
+          {/* Plaid Integration */}
+          <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 20 }}>
+            <h4 style={{ fontSize: 14, fontWeight: 600, color: "#f0f0f0", marginBottom: 8 }}>Auto-Sync via Plaid</h4>
+            <p style={{ color: "#888", fontSize: 12, marginBottom: 12 }}>
+              Connect directly to your bank to automatically import transactions.
+              {!plaidAvailable && " Requires a Plaid backend server — see server/plaid.js for setup."}
+            </p>
+            {plaidAvailable ? (
+              <div>
+                <Btn icon="sync" onClick={initPlaid} disabled={plaidStatus === "loading" || plaidStatus === "syncing"}>
+                  {plaidStatus === "loading" ? "Opening Plaid..." : plaidStatus === "syncing" ? "Syncing..." : plaidStatus === "done" ? "Connected!" : "Connect via Plaid"}
+                </Btn>
+                {plaidStatus === "error" && <span style={{ color: "#ef4444", fontSize: 12, marginLeft: 8 }}>Connection failed. Try again.</span>}
+              </div>
+            ) : (
+              <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: 12, fontSize: 12, color: "#666" }}>
+                <strong style={{ color: "#888" }}>Setup required:</strong> Run <code style={{ background: "rgba(255,255,255,0.06)", padding: "2px 6px", borderRadius: 4 }}>node server/plaid.js</code> with your Plaid API keys. See the file for instructions.
+              </div>
+            )}
+          </div>
+        </div>
+      </Modal>
+
+      {/* ─── Export Modal ─── */}
+      <Modal isOpen={showExportModal} onClose={() => setShowExportModal(false)} title="Export Expenses" width="400px">
+        <p style={{ color: "#888", fontSize: 13, marginBottom: 16 }}>Download expenses as CSV for the selected month:</p>
+        <Input label="Month" type="month" value={exportMonth} onChange={setExportMonth} />
+        <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: 12, marginBottom: 20 }}>
+          <div style={{ fontSize: 12, color: "#888" }}>
+            {expenses.filter(e => e.date.startsWith(exportMonth)).length} expenses found for {exportMonth}
+          </div>
+        </div>
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+          <Btn variant="secondary" onClick={() => setShowExportModal(false)}>Cancel</Btn>
+          <Btn icon="download" onClick={handleExportCSV}>Download CSV</Btn>
+        </div>
+      </Modal>
+
+      {/* ─── Add Expense Modal ─── */}
+      <Modal isOpen={showAddModal} onClose={() => setShowAddModal(false)} title="Add Expense" width="480px">
+        <Input label="Date" type="date" value={newDate} onChange={setNewDate} />
+        <Input label="Merchant / Description" value={newMerchant} onChange={setNewMerchant} placeholder="e.g. Office Depot, Adobe, Delta Airlines" />
+        <Input label="Amount ($)" type="number" value={newAmount} onChange={setNewAmount} placeholder="0.00" min="0" step="0.01" />
+        <Select label="Category" value={newCategory} onChange={v => {
+            if (v === "__add_custom__") { handleCustomCategory(newCategory, setNewCategory); return; }
+            setNewCategory(v);
+          }}
+          options={[...expenseCategories.map(c => ({ value: c, label: c })), { value: "__add_custom__", label: "+ Add Custom Category" }]} />
+        <Select label="Card" value={newCard} onChange={setNewCard}
+          options={[{ value: "", label: "Manual (no card)" }, ...creditCards.map(c => ({ value: c.last4, label: `${c.brand} (****${c.last4})` }))]} />
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+            <input type="checkbox" checked={newRecurring} onChange={e => setNewRecurring(e.target.checked)}
+              style={{ width: 16, height: 16, accentColor: "#6366f1" }} />
+            <span style={{ fontSize: 13, color: "#ccc" }}>This is a recurring expense (subscription)</span>
+          </label>
+        </div>
+        <TextArea label="Notes (optional)" value={newNotes} onChange={setNewNotes} rows={2} placeholder="Any additional details..." />
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+          <Btn variant="secondary" onClick={() => setShowAddModal(false)}>Cancel</Btn>
+          <Btn onClick={handleAddExpense} disabled={!newMerchant || !newAmount}>Add Expense</Btn>
+        </div>
+      </Modal>
+
+      {/* ─── Import Modal (CSV + PDF) ─── */}
+      <Modal isOpen={showImportModal} onClose={() => { setShowImportModal(false); setImportMode("choose"); setCsvData([]); setCsvColumns([]); setPdfParsed([]); setPdfError(""); }}
+        title={importMode === "choose" ? "Import Expenses" : importMode === "csv" ? "Import from CSV" : "Import from PDF Statement"} width="700px">
+
+        {/* ── Choose Format ── */}
+        {importMode === "choose" && (
+          <div>
+            <p style={{ color: "#888", fontSize: 13, marginBottom: 20 }}>Choose how to import your expenses:</p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              {/* CSV Option */}
+              <div onClick={() => setImportMode("csv")}
+                style={{ background: "rgba(255,255,255,0.03)", borderRadius: 14, padding: 24, border: "1px solid rgba(255,255,255,0.08)", cursor: "pointer", textAlign: "center", transition: "all 0.15s" }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(99,102,241,0.4)"; e.currentTarget.style.background = "rgba(99,102,241,0.04)"; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.background = "rgba(255,255,255,0.03)"; }}>
+                <div style={{ width: 48, height: 48, borderRadius: 12, background: "rgba(99,102,241,0.1)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
+                  <Icon name="invoice" size={24} />
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: "#f0f0f0", marginBottom: 4 }}>CSV File</div>
+                <div style={{ fontSize: 12, color: "#888" }}>Upload a .csv export from your bank. You'll map columns to fields.</div>
+              </div>
+
+              {/* PDF Option */}
+              <div onClick={() => document.getElementById("pdf-upload-input")?.click()}
+                style={{ background: "rgba(255,255,255,0.03)", borderRadius: 14, padding: 24, border: "1px solid rgba(255,255,255,0.08)", cursor: "pointer", textAlign: "center", transition: "all 0.15s", position: "relative" }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(16,185,129,0.4)"; e.currentTarget.style.background = "rgba(16,185,129,0.04)"; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)"; e.currentTarget.style.background = "rgba(255,255,255,0.03)"; }}>
+                <div style={{ width: 48, height: 48, borderRadius: 12, background: "rgba(16,185,129,0.1)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 12px" }}>
+                  <Icon name="receipt" size={24} />
+                </div>
+                <div style={{ fontSize: 16, fontWeight: 600, color: "#f0f0f0", marginBottom: 4 }}>PDF Statements</div>
+                <div style={{ fontSize: 12, color: "#888" }}>Upload one or more bank/credit card statement PDFs. Transactions are auto-detected.</div>
+                {pdfParsing && (
+                  <div style={{ position: "absolute", inset: 0, background: "rgba(0,0,0,0.7)", borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8 }}>
+                    <div style={{ width: 24, height: 24, border: "3px solid rgba(255,255,255,0.2)", borderTop: "3px solid #10b981", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+                    <span style={{ color: "#10b981", fontSize: 12 }}>Reading PDFs...</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            <input id="pdf-upload-input" type="file" accept=".pdf" multiple onChange={handlePdfFile} style={{ display: "none" }} />
+            {pdfError && (
+              <div style={{ background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.15)", borderRadius: 8, padding: 12, marginTop: 16, fontSize: 12, color: "#ef4444", display: "flex", alignItems: "flex-start", gap: 8 }}>
+                <Icon name="alert" size={16} />
+                <div>
+                  <div style={{ fontWeight: 600, marginBottom: 2 }}>Could not parse PDF</div>
+                  {pdfError.split("\n").map((line, i) => <div key={i}>{line}</div>)}
+                </div>
+              </div>
+            )}
+            <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+          </div>
+        )}
+
+        {/* ── CSV Flow ── */}
+        {importMode === "csv" && csvData.length === 0 && (
+          <div>
+            <p style={{ color: "#888", fontSize: 13, marginBottom: 16 }}>
+              Upload a CSV file exported from your bank or credit card provider.
+            </p>
+            <div style={{ border: "2px dashed rgba(255,255,255,0.1)", borderRadius: 12, padding: 40, textAlign: "center", cursor: "pointer" }}
+              onClick={() => document.getElementById("csv-upload-input")?.click()}>
+              <Icon name="download" size={32} />
+              <div style={{ fontSize: 14, color: "#888", marginTop: 12 }}>Click to upload CSV file</div>
+              <div style={{ fontSize: 11, color: "#666", marginTop: 4 }}>Supports Chase, Amex, Capital One, and generic CSV formats</div>
+            </div>
+            <input id="csv-upload-input" type="file" accept=".csv" onChange={handleCSVFile} style={{ display: "none" }} />
+            <div style={{ marginTop: 16 }}>
+              <Btn variant="ghost" onClick={() => setImportMode("choose")}>Back</Btn>
+            </div>
+          </div>
+        )}
+
+        {importMode === "csv" && csvData.length > 0 && (
+          <div>
+            <div style={{ background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.15)", borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 12, color: "#10b981" }}>
+              Found {csvData.length} rows with {csvColumns.length} columns
+            </div>
+            <h4 style={{ fontSize: 13, fontWeight: 600, color: "#f0f0f0", marginBottom: 12 }}>Map Columns</h4>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
+              <Select label="Date Column *" value={csvMapping.date} onChange={v => setCsvMapping(p => ({ ...p, date: v }))}
+                options={[{ value: "", label: "-- Select --" }, ...csvColumns.map((c, i) => ({ value: String(i), label: c }))]} />
+              <Select label="Merchant Column *" value={csvMapping.merchant} onChange={v => setCsvMapping(p => ({ ...p, merchant: v }))}
+                options={[{ value: "", label: "-- Select --" }, ...csvColumns.map((c, i) => ({ value: String(i), label: c }))]} />
+              <Select label="Amount Column *" value={csvMapping.amount} onChange={v => setCsvMapping(p => ({ ...p, amount: v }))}
+                options={[{ value: "", label: "-- Select --" }, ...csvColumns.map((c, i) => ({ value: String(i), label: c }))]} />
+              <Select label="Category Column (optional)" value={csvMapping.category} onChange={v => setCsvMapping(p => ({ ...p, category: v }))}
+                options={[{ value: "", label: "None / Unknown" }, ...csvColumns.map((c, i) => ({ value: String(i), label: c }))]} />
+            </div>
+            <Select label="Assign to Card" value={csvCard} onChange={setCsvCard}
+              options={[{ value: "", label: "None / Manual" }, ...creditCards.map(c => ({ value: c.last4, label: `${c.brand} (****${c.last4})` }))]} />
+            <h4 style={{ fontSize: 13, fontWeight: 600, color: "#f0f0f0", marginBottom: 8, marginTop: 16 }}>Preview (first 5 rows)</h4>
+            <div style={{ overflowX: "auto", borderRadius: 8, border: "1px solid rgba(255,255,255,0.06)", marginBottom: 16 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: "rgba(255,255,255,0.03)" }}>
+                    {csvColumns.map((c, i) => (
+                      <th key={i} style={{ padding: "8px 10px", color: "#888", textAlign: "left", fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.06)",
+                        background: [csvMapping.date, csvMapping.merchant, csvMapping.amount, csvMapping.category].includes(String(i)) ? "rgba(99,102,241,0.08)" : "transparent" }}>
+                        {c}
+                        {csvMapping.date === String(i) && <Badge color="#6366f1" style={{ marginLeft: 4, fontSize: 9 }}>Date</Badge>}
+                        {csvMapping.merchant === String(i) && <Badge color="#10b981" style={{ marginLeft: 4, fontSize: 9 }}>Merchant</Badge>}
+                        {csvMapping.amount === String(i) && <Badge color="#f59e0b" style={{ marginLeft: 4, fontSize: 9 }}>Amount</Badge>}
+                        {csvMapping.category === String(i) && <Badge color="#8b5cf6" style={{ marginLeft: 4, fontSize: 9 }}>Category</Badge>}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {csvData.slice(0, 5).map((row, ri) => (
+                    <tr key={ri} style={{ borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
+                      {row.map((cell, ci) => (
+                        <td key={ci} style={{ padding: "6px 10px", color: "#ccc" }}>{cell}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <Btn variant="secondary" onClick={() => { setCsvData([]); setCsvColumns([]); }}>Choose Different File</Btn>
+              <Btn onClick={handleImportCSV} disabled={!csvMapping.date || !csvMapping.merchant || !csvMapping.amount}>
+                Import {csvData.length} Expenses
+              </Btn>
+            </div>
+          </div>
+        )}
+
+        {/* ── PDF Results ── */}
+        {importMode === "pdf" && pdfParsed.length > 0 && (
+          <div>
+            <div style={{ background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.15)", borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 12, color: "#10b981" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: pdfFileNames.length > 1 ? 8 : 0 }}>
+                <span>Parsed {pdfParsed.length} transactions from <strong>{pdfFileNames.length} file{pdfFileNames.length > 1 ? "s" : ""}</strong></span>
+                <span>{pdfParsed.filter(t => t.isCredit).length} credits/payments auto-excluded</span>
+              </div>
+              {pdfFileNames.length > 1 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                  {pdfFileNames.map((name, i) => {
+                    const count = pdfParsed.filter(t => t.source === name).length;
+                    return <span key={i} style={{ background: "rgba(16,185,129,0.12)", borderRadius: 4, padding: "2px 8px", fontSize: 11 }}>{name} ({count})</span>;
+                  })}
+                </div>
+              )}
+            </div>
+            <input id="pdf-add-more-input" type="file" accept=".pdf" multiple onChange={e => handlePdfFile(e, true)} style={{ display: "none" }} />
+
+            <Select label="Assign to Card" value={pdfCard} onChange={setPdfCard}
+              options={[{ value: "", label: "None / Manual" }, ...creditCards.map(c => ({ value: c.last4, label: `${c.brand} (****${c.last4})` }))]} />
+
+            <h4 style={{ fontSize: 13, fontWeight: 600, color: "#f0f0f0", marginBottom: 8, marginTop: 12 }}>Detected Transactions</h4>
+            <p style={{ fontSize: 11, color: "#888", marginBottom: 12 }}>Uncheck any rows you don't want to import. Credits/payments are excluded by default.</p>
+
+            <div style={{ overflowX: "auto", maxHeight: 350, overflowY: "auto", borderRadius: 8, border: "1px solid rgba(255,255,255,0.06)", marginBottom: 16 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: "rgba(255,255,255,0.03)", position: "sticky", top: 0, zIndex: 1 }}>
+                    <th style={{ padding: "8px 10px", color: "#888", textAlign: "center", fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.06)", width: 30, background: "rgba(30,30,46,0.95)" }}>
+                      <input type="checkbox"
+                        checked={pdfParsed.filter(t => !t.isCredit).every(t => !pdfExcluded.has(t.id))}
+                        onChange={() => {
+                          const charges = pdfParsed.filter(t => !t.isCredit);
+                          const allIncluded = charges.every(t => !pdfExcluded.has(t.id));
+                          setPdfExcluded(allIncluded ? new Set(charges.map(t => t.id)) : new Set());
+                        }}
+                        style={{ accentColor: "#6366f1" }} />
+                    </th>
+                    <th style={{ padding: "8px 10px", color: "#888", textAlign: "left", fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(30,30,46,0.95)" }}>Date</th>
+                    <th style={{ padding: "8px 10px", color: "#888", textAlign: "left", fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(30,30,46,0.95)" }}>Description</th>
+                    <th style={{ padding: "8px 10px", color: "#888", textAlign: "right", fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(30,30,46,0.95)" }}>Amount</th>
+                    <th style={{ padding: "8px 10px", color: "#888", textAlign: "center", fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(30,30,46,0.95)" }}>Type</th>
+                    {pdfFileNames.length > 1 && <th style={{ padding: "8px 10px", color: "#888", textAlign: "left", fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(30,30,46,0.95)" }}>Source</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {pdfParsed.map(t => {
+                    const excluded = pdfExcluded.has(t.id) || t.isCredit;
+                    return (
+                      <tr key={t.id}
+                        style={{ borderBottom: "1px solid rgba(255,255,255,0.03)", opacity: excluded ? 0.4 : 1 }}
+                        onClick={() => !t.isCredit && togglePdfRow(t.id)}>
+                        <td style={{ padding: "6px 10px", textAlign: "center" }}>
+                          {t.isCredit ? (
+                            <span style={{ color: "#666", fontSize: 10 }}>skip</span>
+                          ) : (
+                            <input type="checkbox" checked={!pdfExcluded.has(t.id)}
+                              onChange={() => togglePdfRow(t.id)} onClick={e => e.stopPropagation()}
+                              style={{ accentColor: "#6366f1", cursor: "pointer" }} />
+                          )}
+                        </td>
+                        <td style={{ padding: "6px 10px", color: "#ccc", whiteSpace: "nowrap" }}>{formatDate(t.date)}</td>
+                        <td style={{ padding: "6px 10px", color: excluded ? "#666" : "#f0f0f0", maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.merchant}</td>
+                        <td style={{ padding: "6px 10px", textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: t.isCredit ? "#10b981" : "#ef4444" }}>
+                          {t.isCredit ? "+" : "-"}{formatCurrency(t.amount)}
+                        </td>
+                        <td style={{ padding: "6px 10px", textAlign: "center" }}>
+                          <Badge color={t.isCredit ? "#10b981" : "#6366f1"} style={{ fontSize: 9 }}>
+                            {t.isCredit ? "Credit" : "Charge"}
+                          </Badge>
+                        </td>
+                        {pdfFileNames.length > 1 && <td style={{ padding: "6px 10px", color: "#888", fontSize: 11, maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.source}</td>}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Summary */}
+            <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: 12, marginBottom: 16, display: "flex", justifyContent: "space-between", fontSize: 13 }}>
+              <span style={{ color: "#888" }}>
+                {pdfParsed.filter(t => !t.isCredit && !pdfExcluded.has(t.id)).length} charges selected
+              </span>
+              <span style={{ color: "#ef4444", fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>
+                Total: -{formatCurrency(pdfParsed.filter(t => !t.isCredit && !pdfExcluded.has(t.id)).reduce((s, t) => s + t.amount, 0))}
+              </span>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", gap: 8 }}>
+                <Btn variant="secondary" onClick={() => { setImportMode("choose"); setPdfParsed([]); setPdfError(""); setPdfFileNames([]); }}>Back</Btn>
+                <Btn variant="ghost" icon="download" onClick={() => document.getElementById("pdf-add-more-input")?.click()}>Add More PDFs</Btn>
+              </div>
+              <Btn onClick={handleImportPdf} disabled={pdfParsed.filter(t => !t.isCredit && !pdfExcluded.has(t.id)).length === 0}>
+                Import {pdfParsed.filter(t => !t.isCredit && !pdfExcluded.has(t.id)).length} Expenses
+              </Btn>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* ─── Budget Manager Modal ─── */}
+      <Modal isOpen={showBudgetModal} onClose={() => setShowBudgetModal(false)} title="Category Budgets" width="480px">
+        <p style={{ color: "#888", fontSize: 13, marginBottom: 16 }}>Set monthly spending limits per category. You'll see warnings when you approach or exceed them.</p>
+
+        {/* Existing budgets */}
+        {Object.keys(budgets).length > 0 && (
+          <div style={{ marginBottom: 20 }}>
+            {Object.entries(budgets).map(([cat, limit]) => {
+              const spent = expenses.filter(e => e.category === cat && e.date.startsWith(currentMonth)).reduce((s, e) => s + e.amount, 0);
+              const pct = limit > 0 ? (spent / limit) * 100 : 0;
+              return (
+                <div key={cat} style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 13, color: "#f0f0f0", fontWeight: 500 }}>{cat}</div>
+                    <div style={{ height: 4, background: "rgba(255,255,255,0.06)", borderRadius: 2, marginTop: 4, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: pct > 100 ? "#ef4444" : pct > 80 ? "#f59e0b" : "#10b981", borderRadius: 2 }} />
+                    </div>
+                    <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>{formatCurrency(spent)} / {formatCurrency(limit)} ({Math.round(pct)}%)</div>
+                  </div>
+                  <button onClick={() => removeBudget(cat)} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", padding: 4 }}>
+                    <Icon name="x" size={14} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Add new budget */}
+        <div style={{ display: "flex", gap: 8, alignItems: "flex-end" }}>
+          <Select label="Category" value={budgetCat} onChange={setBudgetCat}
+            options={[{ value: "", label: "Select category..." }, ...expenseCategories.filter(c => c !== "Unknown" && !budgets[c]).map(c => ({ value: c, label: c }))]}
+            style={{ flex: 2 }} />
+          <Input label="Monthly Limit ($)" type="number" value={budgetAmt} onChange={setBudgetAmt} placeholder="500" style={{ flex: 1 }} />
+          <Btn onClick={saveBudget} disabled={!budgetCat || !budgetAmt} style={{ marginBottom: 14 }}>Add</Btn>
         </div>
       </Modal>
     </div>
@@ -1412,6 +2839,7 @@ const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: "dashboard" },
   { id: "tax", label: "S Corp Tax", icon: "tax" },
   { id: "banking", label: "Banking", icon: "bank" },
+  { id: "expenses", label: "Expenses", icon: "receipt" },
   { id: "invoicing", label: "Invoicing", icon: "invoice" },
   { id: "inquiries", label: "Inquiries", icon: "inquiry" },
   { id: "contracts", label: "Contracts", icon: "contract" },
@@ -1424,11 +2852,28 @@ const NAV_ITEMS = [
 export default function App() {
   const [activeView, setActiveView] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [transactions, setTransactions] = useState(sampleTransactions);
-  const [invoices, setInvoices] = useState(sampleInvoices);
-  const [inquiries, setInquiries] = useState(sampleInquiries);
-  const [contracts, setContracts] = useState([]);
-  const [events, setEvents] = useState(sampleEvents);
+  const [transactions, setTransactions] = useState(() => loadState("cs_transactions", sampleTransactions));
+  const [invoices, setInvoices] = useState(() => loadState("cs_invoices", sampleInvoices));
+  const [inquiries, setInquiries] = useState(() => loadState("cs_inquiries", sampleInquiries));
+  const [contracts, setContracts] = useState(() => loadState("cs_contracts", []));
+  const [events, setEvents] = useState(() => loadState("cs_events", sampleEvents));
+  const [creditCards, setCreditCards] = useState(() => loadState("cs_creditCards", sampleCreditCards));
+  const [expenses, setExpenses] = useState(() => loadState("cs_expenses", sampleExpenses));
+  const [budgets, setBudgets] = useState(() => loadState("cs_budgets", {}));
+  const [categoryRules, setCategoryRules] = useState(() => loadState("cs_categoryRules", {}));
+  const [customCategories, setCustomCategories] = useState(() => loadState("cs_customCategories", []));
+  const expenseCategories = [...DEFAULT_EXPENSE_CATEGORIES.filter(c => c !== "Unknown"), ...customCategories, "Unknown"];
+
+  useEffect(() => { saveState("cs_transactions", transactions); }, [transactions]);
+  useEffect(() => { saveState("cs_invoices", invoices); }, [invoices]);
+  useEffect(() => { saveState("cs_inquiries", inquiries); }, [inquiries]);
+  useEffect(() => { saveState("cs_contracts", contracts); }, [contracts]);
+  useEffect(() => { saveState("cs_events", events); }, [events]);
+  useEffect(() => { saveState("cs_creditCards", creditCards); }, [creditCards]);
+  useEffect(() => { saveState("cs_expenses", expenses); }, [expenses]);
+  useEffect(() => { saveState("cs_budgets", budgets); }, [budgets]);
+  useEffect(() => { saveState("cs_categoryRules", categoryRules); }, [categoryRules]);
+  useEffect(() => { saveState("cs_customCategories", customCategories); }, [customCategories]);
 
   const handleConvertToContract = (inquiry) => {
     const contract = {
@@ -1487,7 +2932,8 @@ export default function App() {
     switch (activeView) {
       case "dashboard": return <Dashboard transactions={transactions} invoices={invoices} inquiries={inquiries} events={events} />;
       case "tax": return <TaxManagement transactions={transactions} />;
-      case "banking": return <Banking transactions={transactions} setTransactions={setTransactions} />;
+      case "banking": return <Banking transactions={transactions} setTransactions={setTransactions} expenseCategories={expenseCategories} />;
+      case "expenses": return <Expenses expenses={expenses} setExpenses={setExpenses} creditCards={creditCards} setCreditCards={setCreditCards} budgets={budgets} setBudgets={setBudgets} categoryRules={categoryRules} setCategoryRules={setCategoryRules} expenseCategories={expenseCategories} customCategories={customCategories} setCustomCategories={setCustomCategories} />;
       case "invoicing": return <Invoicing invoices={invoices} setInvoices={setInvoices} />;
       case "inquiries": return <InquiryManagement inquiries={inquiries} setInquiries={setInquiries} onConvertToContract={handleConvertToContract} />;
       case "contracts": return <Contracting contracts={contracts} setContracts={setContracts} invoices={invoices} setInvoices={setInvoices} />;
