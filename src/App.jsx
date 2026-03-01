@@ -85,28 +85,9 @@ const sampleTransactions = [
   { id: generateId(), date: "2026-01-20", description: "Mystery payment XREF991", amount: -250.00, category: "Unknown", account: "Chase Business CC", reconciled: false },
 ];
 
-const sampleCreditCards = [
-  { id: generateId(), brand: "Chase Ink Business Preferred", last4: "4821", color: "#1a73e8", status: "connected", balance: 1283.92, limit: 10000, lastSync: "2026-02-28T10:30:00" },
-  { id: generateId(), brand: "Amex Business Gold", last4: "3092", color: "#006fcf", status: "connected", balance: 742.18, limit: 15000, lastSync: "2026-02-28T09:15:00" },
-];
+const sampleCreditCards = [];
 
-const sampleExpenses = [
-  { id: generateId(), date: "2026-02-28", merchant: "Adobe Creative Cloud", amount: 54.99, category: "Software & Tools", cardLast4: "4821", recurring: true, receipt: true, notes: "Monthly subscription", status: "categorized" },
-  { id: generateId(), date: "2026-02-27", merchant: "Office Depot", amount: 127.43, category: "Office Supplies", cardLast4: "4821", recurring: false, receipt: true, notes: "", status: "categorized" },
-  { id: generateId(), date: "2026-02-26", merchant: "Delta Airlines", amount: 389.00, category: "Travel", cardLast4: "3092", recurring: false, receipt: false, notes: "Client meeting in Chicago", status: "categorized" },
-  { id: generateId(), date: "2026-02-25", merchant: "Unknown Charge #4821", amount: 89.00, category: "Unknown", cardLast4: "4821", recurring: false, receipt: false, notes: "", status: "needs_review" },
-  { id: generateId(), date: "2026-02-24", merchant: "Google Workspace", amount: 14.40, category: "Software & Tools", cardLast4: "4821", recurring: true, receipt: true, notes: "Business email", status: "categorized" },
-  { id: generateId(), date: "2026-02-23", merchant: "Uber", amount: 34.56, category: "Travel", cardLast4: "4821", recurring: false, receipt: true, notes: "Client meeting downtown", status: "categorized" },
-  { id: generateId(), date: "2026-02-22", merchant: "Staples", amount: 63.21, category: "Office Supplies", cardLast4: "3092", recurring: false, receipt: false, notes: "", status: "needs_review" },
-  { id: generateId(), date: "2026-02-20", merchant: "AWS", amount: 187.32, category: "Software & Tools", cardLast4: "4821", recurring: true, receipt: true, notes: "Cloud hosting", status: "categorized" },
-  { id: generateId(), date: "2026-02-18", merchant: "Hilton Hotels", amount: 245.00, category: "Travel", cardLast4: "3092", recurring: false, receipt: true, notes: "Conference stay", status: "categorized" },
-  { id: generateId(), date: "2026-02-15", merchant: "Slack", amount: 12.50, category: "Subscriptions", cardLast4: "4821", recurring: true, receipt: true, notes: "Team comms", status: "categorized" },
-  { id: generateId(), date: "2026-02-14", merchant: "Chipotle", amount: 28.45, category: "Meals & Entertainment", cardLast4: "4821", recurring: false, receipt: false, notes: "Team lunch", status: "categorized" },
-  { id: generateId(), date: "2026-02-12", merchant: "FedEx", amount: 42.00, category: "Office Supplies", cardLast4: "3092", recurring: false, receipt: true, notes: "Client package", status: "categorized" },
-  { id: generateId(), date: "2026-02-10", merchant: "Zoom Pro", amount: 15.99, category: "Subscriptions", cardLast4: "4821", recurring: true, receipt: true, notes: "Video calls", status: "categorized" },
-  { id: generateId(), date: "2026-02-08", merchant: "Mystery Payment XREF991", amount: 250.00, category: "Unknown", cardLast4: "4821", recurring: false, receipt: false, notes: "", status: "needs_review" },
-  { id: generateId(), date: "2026-02-05", merchant: "LinkedIn Premium", amount: 59.99, category: "Marketing", cardLast4: "3092", recurring: true, receipt: true, notes: "Business networking", status: "categorized" },
-];
+const sampleExpenses = [];
 
 const sampleInquiries = [
   { id: generateId(), name: "Johnson Wedding", contact: "Sarah Johnson", email: "sarah@email.com", phone: "555-0101", phase: "new", grade: "A", date: "2026-06-15", value: 8500, notes: "200 guests, outdoor venue", nextSteps: "Send portfolio and pricing guide" },
@@ -296,8 +277,95 @@ const loadState = (key, fallback) => {
   } catch { return fallback; }
 };
 
+// Normalize merchant name by stripping transaction-specific numbers/IDs
+const normalizeMerchant = (name) => {
+  return name.toLowerCase().trim()
+    .replace(/\b\d{5,}\b/g, "")   // remove long number sequences (transaction IDs)
+    .replace(/\s{2,}/g, " ")       // collapse multiple spaces
+    .replace(/#\d+/g, "")          // remove #12345 patterns
+    .trim();
+};
+
+const merchantsMatch = (a, b) => normalizeMerchant(a) === normalizeMerchant(b);
+
+const findCategoryRule = (merchant, rules) => {
+  const norm = normalizeMerchant(merchant);
+  for (const [key, cat] of Object.entries(rules)) {
+    if (normalizeMerchant(key) === norm) return cat;
+  }
+  return null;
+};
+
 const saveState = (key, value) => {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch {}
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch (e) {
+    console.warn(`Failed to save ${key}:`, e.message);
+  }
+};
+
+// ── IndexedDB helpers for large data (receipts) ──
+const DB_NAME = "suitegig";
+const DB_VERSION = 1;
+const openDB = () => new Promise((resolve, reject) => {
+  const req = indexedDB.open(DB_NAME, DB_VERSION);
+  req.onupgradeneeded = () => req.result.createObjectStore("receipts");
+  req.onsuccess = () => resolve(req.result);
+  req.onerror = () => reject(req.error);
+});
+
+const saveReceipt = async (id, data) => {
+  try {
+    const db = await openDB();
+    const tx = db.transaction("receipts", "readwrite");
+    tx.objectStore("receipts").put(data, id);
+  } catch {}
+};
+
+const loadReceipt = async (id) => {
+  try {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      const tx = db.transaction("receipts", "readonly");
+      const req = tx.objectStore("receipts").get(id);
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch { return null; }
+};
+
+const deleteReceipt = async (id) => {
+  try {
+    const db = await openDB();
+    const tx = db.transaction("receipts", "readwrite");
+    tx.objectStore("receipts").delete(id);
+  } catch {}
+};
+
+// Save expenses with receipts stripped out (stored separately in IndexedDB)
+const saveExpenses = (expenses) => {
+  const stripped = expenses.map(e => {
+    if (e.receipt && typeof e.receipt === "string" && e.receipt.startsWith("data:")) {
+      saveReceipt(e.id, e.receipt);
+      return { ...e, receipt: true };
+    }
+    return e;
+  });
+  saveState("cs_expenses", stripped);
+};
+
+// Load expenses and rehydrate receipts from IndexedDB
+const loadExpenses = (fallback) => {
+  const expenses = loadState("cs_expenses", fallback);
+  // Rehydrate receipts asynchronously
+  expenses.forEach(e => {
+    if (e.receipt === true) {
+      loadReceipt(e.id).then(data => {
+        if (data) e.receipt = data;
+      });
+    }
+  });
+  return expenses;
 };
 
 // ═══════════════════════════════════════════════════════
@@ -848,10 +916,10 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
 
   const applyRuleNow = (cat) => {
     if (!editingExpense || cat === "Unknown") return;
-    const merchantKey = editingExpense.merchant.toLowerCase().trim();
+    const merchantKey = normalizeMerchant(editingExpense.merchant);
     setExpenses(prev => prev.map(e => {
       if (e.id === editingExpense.id) return e;
-      if (e.merchant.toLowerCase().trim() === merchantKey) {
+      if (merchantsMatch(e.merchant, editingExpense.merchant)) {
         return { ...e, category: cat, status: "categorized" };
       }
       return e;
@@ -894,12 +962,14 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
 
   // ── Delete ──
   const deleteExpense = (id) => {
+    deleteReceipt(id);
     setExpenses(prev => prev.filter(e => e.id !== id));
     setEditingExpense(null);
   };
 
   const bulkDelete = () => {
     if (!window.confirm(`Delete ${selectedIds.size} expense(s)?`)) return;
+    selectedIds.forEach(id => deleteReceipt(id));
     setExpenses(prev => prev.filter(e => !selectedIds.has(e.id)));
     setSelectedIds(new Set());
   };
@@ -985,7 +1055,7 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
       if (amount === 0) return null;
       const merchant = row[parseInt(csvMapping.merchant)] || "Unknown Merchant";
       const csvCat = csvMapping.category ? (row[parseInt(csvMapping.category)] || "Unknown") : "Unknown";
-      const ruleCat = categoryRules[merchant.toLowerCase()];
+      const ruleCat = findCategoryRule(merchant, categoryRules);
       const category = csvCat !== "Unknown" ? csvCat : (ruleCat || "Unknown");
       return {
         id: generateId(),
@@ -1224,7 +1294,7 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
     const toImport = pdfParsed
       .filter(t => !pdfExcluded.has(t.id) && !t.isCredit)
       .map(t => {
-        const ruleCat = categoryRules[t.merchant.toLowerCase()];
+        const ruleCat = findCategoryRule(t.merchant, categoryRules);
         const category = ruleCat || "Unknown";
         return {
           id: generateId(), date: t.date, merchant: t.merchant, amount: t.amount,
@@ -2850,7 +2920,7 @@ const NAV_ITEMS = [
 ];
 
 export default function App() {
-  const [activeView, setActiveView] = useState("dashboard");
+  const [activeView, setActiveView] = useState(() => localStorage.getItem("sg_activeView") || "dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [transactions, setTransactions] = useState(() => loadState("cs_transactions", sampleTransactions));
   const [invoices, setInvoices] = useState(() => loadState("cs_invoices", sampleInvoices));
@@ -2858,19 +2928,20 @@ export default function App() {
   const [contracts, setContracts] = useState(() => loadState("cs_contracts", []));
   const [events, setEvents] = useState(() => loadState("cs_events", sampleEvents));
   const [creditCards, setCreditCards] = useState(() => loadState("cs_creditCards", sampleCreditCards));
-  const [expenses, setExpenses] = useState(() => loadState("cs_expenses", sampleExpenses));
+  const [expenses, setExpenses] = useState(() => loadExpenses(sampleExpenses));
   const [budgets, setBudgets] = useState(() => loadState("cs_budgets", {}));
   const [categoryRules, setCategoryRules] = useState(() => loadState("cs_categoryRules", {}));
   const [customCategories, setCustomCategories] = useState(() => loadState("cs_customCategories", []));
   const expenseCategories = [...DEFAULT_EXPENSE_CATEGORIES.filter(c => c !== "Unknown"), ...customCategories, "Unknown"];
 
+  useEffect(() => { localStorage.setItem("sg_activeView", activeView); }, [activeView]);
   useEffect(() => { saveState("cs_transactions", transactions); }, [transactions]);
   useEffect(() => { saveState("cs_invoices", invoices); }, [invoices]);
   useEffect(() => { saveState("cs_inquiries", inquiries); }, [inquiries]);
   useEffect(() => { saveState("cs_contracts", contracts); }, [contracts]);
   useEffect(() => { saveState("cs_events", events); }, [events]);
   useEffect(() => { saveState("cs_creditCards", creditCards); }, [creditCards]);
-  useEffect(() => { saveState("cs_expenses", expenses); }, [expenses]);
+  useEffect(() => { saveExpenses(expenses); }, [expenses]);
   useEffect(() => { saveState("cs_budgets", budgets); }, [budgets]);
   useEffect(() => { saveState("cs_categoryRules", categoryRules); }, [categoryRules]);
   useEffect(() => { saveState("cs_customCategories", customCategories); }, [customCategories]);
