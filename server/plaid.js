@@ -1,5 +1,5 @@
 /**
- * Plaid Integration Server for CorpSuite
+ * Plaid Integration Server for SuiteGig
  *
  * SETUP:
  * 1. Sign up at https://dashboard.plaid.com/signup (sandbox is free)
@@ -57,8 +57,8 @@ app.get("/api/plaid/status", (req, res) => {
 app.post("/api/plaid/create-link-token", async (req, res) => {
   try {
     const response = await plaidClient.linkTokenCreate({
-      user: { client_user_id: "corpsuite-user" },
-      client_name: "CorpSuite",
+      user: { client_user_id: "suitegig-user" },
+      client_name: "SuiteGig",
       products: [Products.Transactions],
       country_codes: [CountryCode.Us],
       language: "en",

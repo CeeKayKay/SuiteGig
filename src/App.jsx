@@ -2956,7 +2956,7 @@ export default function App() {
           <div style={{ width: 30, height: 30, borderRadius: 8, background: "linear-gradient(135deg, #6366f1, #8b5cf6)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, flexShrink: 0 }}>
             S
           </div>
-          {!sidebarCollapsed && <span style={{ fontSize: 15, fontWeight: 700, color: "#f0f0f0", whiteSpace: "nowrap" }}>CorpSuite</span>}
+          {!sidebarCollapsed && <span style={{ fontSize: 15, fontWeight: 700, color: "#f0f0f0", whiteSpace: "nowrap" }}>SuiteGig</span>}
         </div>
 
         <nav style={{ flex: 1, padding: "8px", overflow: "auto" }}>
@@ -2978,7 +2978,7 @@ export default function App() {
 
         {!sidebarCollapsed && (
           <div style={{ padding: 16, borderTop: "1px solid rgba(255,255,255,0.04)", fontSize: 11, color: "#666" }}>
-            CorpSuite v1.0 · S Corp Mgmt
+            SuiteGig v1.0 · S Corp Mgmt
           </div>
         )}
       </div>
