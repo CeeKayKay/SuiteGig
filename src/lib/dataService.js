@@ -371,94 +371,178 @@ class DataService {
 
   // Category Rules (stored as key-value in local, as rows in Supabase)
   async getCategoryRules() {
+    console.log('[DataService] getCategoryRules called, useSupabase:', this.useSupabase);
+
+    // Always check localStorage first
+    const local = loadLocal('cs_categoryRules', {});
+    console.log('[DataService] localStorage has', Object.keys(local).length, 'category rules');
+
     if (!this.useSupabase) {
-      return loadLocal('cs_categoryRules', {});
+      return local;
     }
 
-    const { data, error } = await supabase
-      .from('category_rules')
-      .select('*');
+    try {
+      const { data, error } = await supabase
+        .from('category_rules')
+        .select('*');
 
-    if (error) {
-      console.error('Error fetching category rules:', error);
-      return loadLocal('cs_categoryRules', {});
+      if (error) {
+        console.error('[DataService] Error fetching category rules:', error);
+        return local;
+      }
+
+      // Convert array to object
+      const supabaseRules = (data || []).reduce((acc, row) => {
+        acc[row.merchant] = row.category;
+        return acc;
+      }, {});
+      console.log('[DataService] Supabase has', Object.keys(supabaseRules).length, 'category rules');
+
+      // If Supabase is empty but localStorage has data, sync localStorage to Supabase
+      if (Object.keys(supabaseRules).length === 0 && Object.keys(local).length > 0) {
+        console.log('[DataService] Syncing localStorage category rules to Supabase...');
+        await this.saveCategoryRules(local);
+        return local;
+      }
+
+      // If Supabase has data, merge with local (Supabase takes precedence, but keep local-only rules)
+      if (Object.keys(supabaseRules).length > 0) {
+        const merged = { ...local, ...supabaseRules };
+        saveLocal('cs_categoryRules', merged);
+        return merged;
+      }
+
+      return local;
+    } catch (err) {
+      console.error('[DataService] Exception in getCategoryRules:', err);
+      return local;
     }
-
-    // Convert array to object
-    return (data || []).reduce((acc, row) => {
-      acc[row.merchant] = row.category;
-      return acc;
-    }, {});
   }
 
   async saveCategoryRules(rules) {
+    console.log('[DataService] saveCategoryRules called with', Object.keys(rules).length, 'rules, useSupabase:', this.useSupabase);
+
+    // Always save to localStorage as backup
+    saveLocal('cs_categoryRules', rules);
+    console.log('[DataService] Saved category rules to localStorage backup');
+
     if (!this.useSupabase) {
-      saveLocal('cs_categoryRules', rules);
       return rules;
     }
 
-    // Convert object to array for Supabase
-    const rows = Object.entries(rules).map(([merchant, category]) => ({
-      merchant,
-      category
-    }));
+    try {
+      // Convert object to array for Supabase
+      const rows = Object.entries(rules).map(([merchant, category]) => ({
+        merchant,
+        category
+      }));
 
-    // Clear and re-insert
-    await supabase.from('category_rules').delete().neq('merchant', '');
-
-    if (rows.length > 0) {
-      const { error } = await supabase
-        .from('category_rules')
-        .insert(rows);
-
-      if (error) {
-        console.error('Error saving category rules:', error);
-        throw error;
+      // Clear and re-insert
+      const { error: deleteError } = await supabase.from('category_rules').delete().neq('merchant', '');
+      if (deleteError) {
+        console.error('[DataService] Error deleting category rules:', deleteError);
       }
-    }
 
-    return rules;
+      if (rows.length > 0) {
+        const { error } = await supabase
+          .from('category_rules')
+          .insert(rows);
+
+        if (error) {
+          console.error('[DataService] Error inserting category rules:', error);
+          return rules; // Return original, already saved to localStorage
+        }
+        console.log('[DataService] Saved', rows.length, 'category rules to Supabase');
+      }
+
+      return rules;
+    } catch (err) {
+      console.error('[DataService] Exception in saveCategoryRules:', err);
+      return rules; // Return original, already saved to localStorage
+    }
   }
 
   // Custom Categories
   async getCustomCategories() {
+    console.log('[DataService] getCustomCategories called, useSupabase:', this.useSupabase);
+
+    // Always check localStorage first
+    const local = loadLocal('cs_customCategories', []);
+    console.log('[DataService] localStorage has', local.length, 'custom categories');
+
     if (!this.useSupabase) {
-      return loadLocal('cs_customCategories', []);
+      return local;
     }
 
-    const { data, error } = await supabase
-      .from('custom_categories')
-      .select('name');
+    try {
+      const { data, error } = await supabase
+        .from('custom_categories')
+        .select('name');
 
-    if (error) {
-      console.error('Error fetching custom categories:', error);
-      return loadLocal('cs_customCategories', []);
+      if (error) {
+        console.error('[DataService] Error fetching custom categories:', error);
+        return local;
+      }
+
+      const supabaseCategories = (data || []).map(row => row.name);
+      console.log('[DataService] Supabase has', supabaseCategories.length, 'custom categories');
+
+      // If Supabase is empty but localStorage has data, sync localStorage to Supabase
+      if (supabaseCategories.length === 0 && local.length > 0) {
+        console.log('[DataService] Syncing localStorage custom categories to Supabase...');
+        await this.saveCustomCategories(local);
+        return local;
+      }
+
+      // If Supabase has data, merge with local (unique values)
+      if (supabaseCategories.length > 0) {
+        const merged = [...new Set([...local, ...supabaseCategories])];
+        saveLocal('cs_customCategories', merged);
+        return merged;
+      }
+
+      return local;
+    } catch (err) {
+      console.error('[DataService] Exception in getCustomCategories:', err);
+      return local;
     }
-
-    return (data || []).map(row => row.name);
   }
 
   async saveCustomCategories(categories) {
+    console.log('[DataService] saveCustomCategories called with', categories.length, 'categories, useSupabase:', this.useSupabase);
+
+    // Always save to localStorage as backup
+    saveLocal('cs_customCategories', categories);
+    console.log('[DataService] Saved custom categories to localStorage backup');
+
     if (!this.useSupabase) {
-      saveLocal('cs_customCategories', categories);
       return categories;
     }
 
-    await supabase.from('custom_categories').delete().neq('name', '');
-
-    if (categories.length > 0) {
-      const rows = categories.map(name => ({ name }));
-      const { error } = await supabase
-        .from('custom_categories')
-        .insert(rows);
-
-      if (error) {
-        console.error('Error saving custom categories:', error);
-        throw error;
+    try {
+      const { error: deleteError } = await supabase.from('custom_categories').delete().neq('name', '');
+      if (deleteError) {
+        console.error('[DataService] Error deleting custom categories:', deleteError);
       }
-    }
 
-    return categories;
+      if (categories.length > 0) {
+        const rows = categories.map(name => ({ name }));
+        const { error } = await supabase
+          .from('custom_categories')
+          .insert(rows);
+
+        if (error) {
+          console.error('[DataService] Error inserting custom categories:', error);
+          return categories; // Return original, already saved to localStorage
+        }
+        console.log('[DataService] Saved', rows.length, 'custom categories to Supabase');
+      }
+
+      return categories;
+    } catch (err) {
+      console.error('[DataService] Exception in saveCustomCategories:', err);
+      return categories; // Return original, already saved to localStorage
+    }
   }
 
   // Budgets (stored as object in local, as rows in Supabase)
