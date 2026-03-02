@@ -141,7 +141,19 @@ const CHECKLIST_ANNUAL = [
 // SAMPLE DATA GENERATORS
 // ═══════════════════════════════════════════════════════
 
-const generateId = () => Math.random().toString(36).substr(2, 9);
+// Generate UUID-compatible IDs for Supabase compatibility
+const generateId = () => {
+  // Use crypto.randomUUID if available (modern browsers), otherwise generate UUID v4 pattern
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback UUID v4 generator
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
 
 const sampleTransactions = [
   { id: generateId(), date: "2026-02-01", description: "Adobe Creative Cloud", amount: -54.99, category: "Software & Tools", account: "Chase Business CC", reconciled: true },

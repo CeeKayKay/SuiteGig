@@ -1,6 +1,38 @@
 import { supabase, isSupabaseConfigured } from './supabase';
 
 // ══════════════════════════════════════════════════════════════
+// UUID HELPERS
+// ══════════════════════════════════════════════════════════════
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const isValidUUID = (id) => UUID_REGEX.test(id);
+
+const generateUUID = () => {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
+
+// Map to track old ID -> new UUID conversions
+const idMigrationMap = new Map();
+
+const ensureUUID = (id) => {
+  if (isValidUUID(id)) return id;
+  // Check if we already converted this ID
+  if (idMigrationMap.has(id)) return idMigrationMap.get(id);
+  // Generate new UUID and remember mapping
+  const newId = generateUUID();
+  idMigrationMap.set(id, newId);
+  return newId;
+};
+
+// ══════════════════════════════════════════════════════════════
 // LOCAL STORAGE FALLBACK
 // ══════════════════════════════════════════════════════════════
 
@@ -28,6 +60,46 @@ class DataService {
     this.useSupabase = isSupabaseConfigured();
     this.cache = {};
     this.subscribers = {};
+  }
+
+  // Force sync all local data to Supabase (for manual sync button)
+  async forceSyncToCloud() {
+    if (!this.useSupabase) {
+      console.log('[DataService] Supabase not configured, cannot sync');
+      return { success: false, error: 'Supabase not configured' };
+    }
+
+    console.log('[DataService] Force syncing all data to Supabase...');
+    const results = {};
+
+    try {
+      // Sync category rules
+      const localRules = loadLocal('cs_categoryRules', {});
+      if (Object.keys(localRules).length > 0) {
+        await this.saveCategoryRules(localRules);
+        results.categoryRules = Object.keys(localRules).length;
+      }
+
+      // Sync custom categories
+      const localCategories = loadLocal('cs_customCategories', []);
+      if (localCategories.length > 0) {
+        await this.saveCustomCategories(localCategories);
+        results.customCategories = localCategories.length;
+      }
+
+      // Sync expenses
+      const localExpenses = loadLocal('cs_expenses', []);
+      if (localExpenses.length > 0) {
+        await this.saveExpenses(localExpenses);
+        results.expenses = localExpenses.length;
+      }
+
+      console.log('[DataService] Force sync complete:', results);
+      return { success: true, results };
+    } catch (err) {
+      console.error('[DataService] Force sync failed:', err);
+      return { success: false, error: err.message };
+    }
   }
 
   // Subscribe to real-time changes (Supabase only)
@@ -170,7 +242,7 @@ class DataService {
   // Expenses - transform between app format and Supabase format
   _expenseToSupabase(exp) {
     return {
-      id: exp.id,
+      id: ensureUUID(exp.id), // Convert non-UUID IDs to valid UUIDs
       date: exp.date,
       merchant: exp.merchant,
       amount: exp.amount,
