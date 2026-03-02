@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import _ from "lodash";
 import { useSuiteGigData } from "./hooks/useSupabaseData";
 import { isSupabaseConfigured } from "./lib/supabase";
+import { dataService } from "./lib/dataService";
 
 // ═══════════════════════════════════════════════════════
 // CONSTANTS & DATA
@@ -962,6 +963,8 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
   const [searchQ, setSearchQ] = useState("");
   const [sortBy, setSortBy] = useState("date"); // "date" | "amount" | "merchant" | "category"
   const [sortDir, setSortDir] = useState("desc"); // "asc" | "desc"
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState(null);
   const [editingExpense, setEditingExpense] = useState(null);
   const [editCategory, setEditCategory] = useState("");
   const [editNotes, setEditNotes] = useState("");
@@ -1012,6 +1015,23 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
   useEffect(() => {
     fetch("/api/plaid/status").then(r => { if (r.ok) setPlaidAvailable(true); }).catch(() => {});
   }, []);
+
+  // Force sync to cloud
+  const handleSyncToCloud = async () => {
+    setSyncing(true);
+    setSyncResult(null);
+    try {
+      const result = await dataService.forceSyncToCloud();
+      setSyncResult(result);
+      if (result.success) {
+        setTimeout(() => setSyncResult(null), 3000);
+      }
+    } catch (err) {
+      setSyncResult({ success: false, error: err.message });
+    } finally {
+      setSyncing(false);
+    }
+  };
 
   // Stats - dynamic month
   const currentMonth = new Date().toISOString().slice(0, 7);
@@ -1668,7 +1688,12 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
           <h1 style={{ fontSize: 28, fontWeight: 700, color: "#f0f0f0", marginBottom: 4 }}>Expenses</h1>
           <p style={{ color: "#888", fontSize: 14 }}>Track and categorize credit card expenses</p>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          {isSupabaseConfigured() && (
+            <Btn variant={syncResult?.success ? "success" : "secondary"} icon="sync" onClick={handleSyncToCloud} disabled={syncing}>
+              {syncing ? "Syncing..." : syncResult?.success ? "Synced!" : "Sync to Cloud"}
+            </Btn>
+          )}
           <Btn variant="secondary" icon="download" onClick={() => setShowExportModal(true)}>Export</Btn>
           <Btn variant="secondary" icon="sync" onClick={() => { setShowImportModal(true); setImportMode("choose"); }}>Import</Btn>
           <Btn variant="success" icon="plus" onClick={() => setShowAddModal(true)}>Add Expense</Btn>
