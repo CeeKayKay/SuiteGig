@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import _ from "lodash";
+import { useSuiteGigData } from "./hooks/useSupabaseData";
+import { isSupabaseConfigured } from "./lib/supabase";
 
 // ═══════════════════════════════════════════════════════
 // CONSTANTS & DATA
@@ -11,6 +13,73 @@ const DEFAULT_EXPENSE_CATEGORIES = [
   "Rent & Utilities", "Equipment", "Payroll", "Taxes",
   "Vehicle", "Education & Training", "Subscriptions", "Unknown"
 ];
+
+// Smart merchant patterns for auto-categorization
+const MERCHANT_PATTERNS = [
+  // Software & Tools
+  { patterns: ["adobe", "microsoft", "google", "dropbox", "slack", "zoom", "github", "aws", "amazon web", "digitalocean", "heroku", "netlify", "vercel", "figma", "canva", "notion", "asana", "trello", "jira", "confluence", "hubspot", "mailchimp", "sendgrid", "twilio", "stripe fee", "shopify", "squarespace", "wix", "godaddy", "namecheap", "cloudflare", "openai", "anthropic"], category: "Software & Tools" },
+  // Subscriptions
+  { patterns: ["netflix", "spotify", "hulu", "disney+", "hbo", "apple music", "youtube premium", "audible", "kindle", "headspace", "calm", "peloton", "subscription", "monthly fee", "annual fee"], category: "Subscriptions" },
+  // Office Supplies
+  { patterns: ["staples", "office depot", "officemax", "amazon.*office", "uline", "quill", "paper", "ink", "toner", "printer"], category: "Office Supplies" },
+  // Travel
+  { patterns: ["airline", "united", "delta", "american air", "southwest", "jetblue", "spirit", "frontier", "alaska air", "hotel", "marriott", "hilton", "hyatt", "airbnb", "vrbo", "expedia", "booking.com", "kayak", "uber", "lyft", "taxi", "parking", "toll", "hertz", "enterprise", "avis", "budget rent", "national car"], category: "Travel" },
+  // Meals & Entertainment
+  { patterns: ["restaurant", "cafe", "coffee", "starbucks", "dunkin", "mcdonald", "wendy", "burger", "pizza", "chipotle", "panera", "subway", "grubhub", "doordash", "uber eats", "postmates", "seamless", "yelp", "opentable", "bar ", "pub ", "grill", "diner", "bistro", "eatery", "kitchen", "bakery", "deli"], category: "Meals & Entertainment" },
+  // Marketing
+  { patterns: ["facebook ads", "meta ads", "google ads", "linkedin ads", "twitter ads", "tiktok ads", "pinterest ads", "bing ads", "advertising", "marketing", "promo", "campaign", "sponsor", "influencer", "pr ", "public relation", "seo", "sem"], category: "Marketing" },
+  // Professional Services
+  { patterns: ["legal", "attorney", "lawyer", "law firm", "accountant", "cpa", "bookkeep", "consultant", "freelance", "contractor", "agency", "design service", "developer", "coach", "advisor"], category: "Professional Services" },
+  // Insurance
+  { patterns: ["insurance", "geico", "state farm", "allstate", "progressive", "liberty mutual", "farmers", "usaa", "nationwide", "travelers", "aetna", "cigna", "blue cross", "united health", "kaiser"], category: "Insurance" },
+  // Rent & Utilities
+  { patterns: ["rent", "lease", "landlord", "property", "electric", "pg&e", "con edison", "duke energy", "water util", "gas util", "sewage", "trash", "waste", "internet", "comcast", "xfinity", "verizon fios", "at&t", "spectrum", "cox", "centurylink"], category: "Rent & Utilities" },
+  // Equipment
+  { patterns: ["apple store", "best buy", "b&h photo", "adorama", "newegg", "micro center", "computer", "laptop", "monitor", "keyboard", "mouse", "printer", "scanner", "camera", "equipment", "hardware", "device"], category: "Equipment" },
+  // Vehicle
+  { patterns: ["gas station", "shell", "chevron", "exxon", "mobil", "bp ", "texaco", "76 ", "arco", "costco gas", "speedway", "wawa", "quiktrip", "car wash", "auto repair", "mechanic", "oil change", "jiffy lube", "valvoline", "firestone", "goodyear", "discount tire", "autozone", "o'reilly", "napa auto", "advance auto", "dmv", "registration"], category: "Vehicle" },
+  // Education & Training
+  { patterns: ["udemy", "coursera", "skillshare", "linkedin learn", "masterclass", "pluralsight", "treehouse", "codecademy", "edx", "education", "training", "workshop", "seminar", "conference", "webinar", "certification", "course", "tuition", "school", "university", "college", "book", "kindle"], category: "Education & Training" },
+];
+
+// Smart categorization function
+const smartCategorize = (merchant, userRules = {}) => {
+  const normalized = merchant.toLowerCase().trim()
+    .replace(/\b\d{5,}\b/g, "")
+    .replace(/\s{2,}/g, " ")
+    .replace(/#\d+/g, "")
+    .replace(/\*+/g, " ")
+    .replace(/[^a-z0-9\s&]/g, " ")
+    .trim();
+
+  // 1. Check user's learned rules first (exact match)
+  for (const [key, cat] of Object.entries(userRules)) {
+    const normKey = key.toLowerCase().trim().replace(/\*+/g, " ").replace(/[^a-z0-9\s&]/g, " ").trim();
+    if (normalized === normKey || normalized.includes(normKey) || normKey.includes(normalized)) {
+      return { category: cat, confidence: "high", source: "learned" };
+    }
+  }
+
+  // 2. Check common merchant patterns
+  for (const { patterns, category } of MERCHANT_PATTERNS) {
+    for (const pattern of patterns) {
+      if (normalized.includes(pattern.toLowerCase())) {
+        return { category, confidence: "medium", source: "pattern" };
+      }
+    }
+  }
+
+  // 3. Check user rules with fuzzy matching (partial)
+  for (const [key, cat] of Object.entries(userRules)) {
+    const normKey = key.toLowerCase().trim().replace(/\*+/g, " ").replace(/[^a-z0-9\s&]/g, " ").trim();
+    const words = normKey.split(" ").filter(w => w.length > 3);
+    if (words.some(word => normalized.includes(word))) {
+      return { category: cat, confidence: "low", source: "fuzzy" };
+    }
+  }
+
+  return { category: "Unknown", confidence: "none", source: null };
+};
 
 const INQUIRY_PHASES = [
   { id: "new", label: "New Lead", color: "#6366f1" },
@@ -686,10 +755,15 @@ const TaxManagement = ({ transactions }) => {
 // SECTION: BANKING / EXPENSES
 // ═══════════════════════════════════════════════════════
 
-const Banking = ({ transactions, setTransactions, expenseCategories = DEFAULT_EXPENSE_CATEGORIES }) => {
+const Banking = ({ transactions, setTransactions, bankAccounts = [], setBankAccounts, expenseCategories = DEFAULT_EXPENSE_CATEGORIES }) => {
   const [filter, setFilter] = useState("all");
   const [searchQ, setSearchQ] = useState("");
   const [editingTx, setEditingTx] = useState(null);
+  const [showAddAccount, setShowAddAccount] = useState(false);
+  const [newAccountName, setNewAccountName] = useState("");
+  const [newAccountType, setNewAccountType] = useState("checking");
+  const [newAccountLast4, setNewAccountLast4] = useState("");
+  const [newAccountBalance, setNewAccountBalance] = useState("");
 
   const unknownTxs = transactions.filter(t => t.category === "Unknown");
   const filtered = transactions.filter(t => {
@@ -702,6 +776,30 @@ const Banking = ({ transactions, setTransactions, expenseCategories = DEFAULT_EX
   const handleCategorize = (id, category) => {
     setTransactions(prev => prev.map(t => t.id === id ? { ...t, category } : t));
     setEditingTx(null);
+  };
+
+  const handleAddAccount = () => {
+    if (!newAccountName.trim()) return;
+    const account = {
+      id: generateId(),
+      name: newAccountName.trim(),
+      type: newAccountType,
+      last_four: newAccountLast4,
+      balance: parseFloat(newAccountBalance) || 0,
+      color: newAccountType === "checking" ? "#3b82f6" : newAccountType === "savings" ? "#10b981" : "#f59e0b"
+    };
+    setBankAccounts(prev => [...prev, account]);
+    setNewAccountName("");
+    setNewAccountType("checking");
+    setNewAccountLast4("");
+    setNewAccountBalance("");
+    setShowAddAccount(false);
+  };
+
+  const handleDeleteAccount = (id) => {
+    if (confirm("Are you sure you want to delete this account?")) {
+      setBankAccounts(prev => prev.filter(a => a.id !== id));
+    }
   };
 
   return (
@@ -719,6 +817,41 @@ const Banking = ({ transactions, setTransactions, expenseCategories = DEFAULT_EX
         </div>
       )}
 
+      {/* Bank Accounts Section */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 600, color: "#f0f0f0" }}>Bank Accounts</h3>
+          <Btn variant="primary" icon="plus" onClick={() => setShowAddAccount(true)}>Add Account</Btn>
+        </div>
+
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          {bankAccounts.length === 0 ? (
+            <div style={{ flex: 1, background: "#1a1d23", borderRadius: 10, padding: 24, border: "1px dashed rgba(255,255,255,0.1)", textAlign: "center" }}>
+              <div style={{ color: "#666", fontSize: 13, marginBottom: 8 }}>No bank accounts added yet</div>
+              <Btn variant="secondary" icon="plus" onClick={() => setShowAddAccount(true)}>Add Your First Account</Btn>
+            </div>
+          ) : (
+            bankAccounts.map(account => (
+              <div key={account.id} style={{ flex: "1 1 280px", maxWidth: 350, background: "#1a1d23", borderRadius: 10, padding: "12px 16px", border: "1px solid rgba(255,255,255,0.05)", display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 36, height: 36, borderRadius: 8, background: `${account.color}15`, display: "flex", alignItems: "center", justifyContent: "center", color: account.color }}>
+                  <Icon name={account.type === "credit" ? "payment" : "bank"} size={18} />
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 11, color: "#888", textTransform: "capitalize" }}>{account.type}{account.last_four ? ` ••${account.last_four}` : ""}</div>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: "#f0f0f0", fontFamily: "monospace", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{account.name}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 15, fontWeight: 600, color: account.balance >= 0 ? "#f0f0f0" : "#ef4444", fontFamily: "monospace" }}>{formatCurrency(account.balance)}</div>
+                </div>
+                <button onClick={() => handleDeleteAccount(account.id)} style={{ background: "none", border: "none", color: "#666", cursor: "pointer", padding: 4 }} title="Delete account">
+                  <Icon name="trash" size={16} />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
       <div style={{ display: "flex", gap: 16, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
         <div style={{ display: "flex", gap: 4 }}>
           {[{ id: "all", label: "All" }, { id: "income", label: "Income" }, { id: "expenses", label: "Expenses" }, { id: "unknown", label: "⚠ Unknown" }].map(f => (
@@ -734,23 +867,6 @@ const Banking = ({ transactions, setTransactions, expenseCategories = DEFAULT_EX
           <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#666" }}><Icon name="search" size={14} /></span>
         </div>
         <Btn variant="secondary" icon="sync">Sync Accounts</Btn>
-      </div>
-
-      <div style={{ display: "flex", gap: 16, marginBottom: 20 }}>
-        <div style={{ flex: 1, background: "#1a1d23", borderRadius: 10, padding: "12px 16px", border: "1px solid rgba(255,255,255,0.05)", display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 8, background: "rgba(59,130,246,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Icon name="bank" size={18} />
-          </div>
-          <div><div style={{ fontSize: 11, color: "#888" }}>Business Checking</div><div style={{ fontSize: 15, fontWeight: 600, color: "#f0f0f0", fontFamily: "monospace" }}>$24,531.47</div></div>
-          <Badge color="#10b981" style={{ marginLeft: "auto" }}>Connected</Badge>
-        </div>
-        <div style={{ flex: 1, background: "#1a1d23", borderRadius: 10, padding: "12px 16px", border: "1px solid rgba(255,255,255,0.05)", display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 8, background: "rgba(245,158,11,0.1)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <Icon name="payment" size={18} />
-          </div>
-          <div><div style={{ fontSize: 11, color: "#888" }}>Chase Business CC</div><div style={{ fontSize: 15, fontWeight: 600, color: "#f0f0f0", fontFamily: "monospace" }}>-$1,283.92</div></div>
-          <Badge color="#10b981" style={{ marginLeft: "auto" }}>Connected</Badge>
-        </div>
       </div>
 
       <Table
@@ -773,6 +889,7 @@ const Banking = ({ transactions, setTransactions, expenseCategories = DEFAULT_EX
         data={filtered}
       />
 
+      {/* Categorize Transaction Modal */}
       <Modal isOpen={editingTx !== null} onClose={() => setEditingTx(null)} title="Categorize Transaction" width="400px">
         <p style={{ color: "#888", fontSize: 13, marginBottom: 16 }}>Select a category for this transaction:</p>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
@@ -782,6 +899,40 @@ const Banking = ({ transactions, setTransactions, expenseCategories = DEFAULT_EX
               {cat}
             </button>
           ))}
+        </div>
+      </Modal>
+
+      {/* Add Account Modal */}
+      <Modal isOpen={showAddAccount} onClose={() => setShowAddAccount(false)} title="Add Bank Account" width="400px">
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div>
+            <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 6 }}>Account Name</label>
+            <input value={newAccountName} onChange={e => setNewAccountName(e.target.value)} placeholder="e.g., Business Checking"
+              style={{ width: "100%", boxSizing: "border-box", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "10px 12px", color: "#f0f0f0", fontSize: 14, fontFamily: "inherit", outline: "none" }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 6 }}>Account Type</label>
+            <select value={newAccountType} onChange={e => setNewAccountType(e.target.value)}
+              style={{ width: "100%", boxSizing: "border-box", background: "#1a1d23", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "10px 12px", color: "#f0f0f0", fontSize: 14, fontFamily: "inherit", outline: "none" }}>
+              <option value="checking">Checking</option>
+              <option value="savings">Savings</option>
+              <option value="credit">Credit Card</option>
+            </select>
+          </div>
+          <div>
+            <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 6 }}>Last 4 Digits (optional)</label>
+            <input value={newAccountLast4} onChange={e => setNewAccountLast4(e.target.value.replace(/\D/g, "").slice(0, 4))} placeholder="1234" maxLength={4}
+              style={{ width: "100%", boxSizing: "border-box", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "10px 12px", color: "#f0f0f0", fontSize: 14, fontFamily: "inherit", outline: "none" }} />
+          </div>
+          <div>
+            <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 6 }}>Current Balance</label>
+            <input value={newAccountBalance} onChange={e => setNewAccountBalance(e.target.value)} placeholder="0.00" type="number" step="0.01"
+              style={{ width: "100%", boxSizing: "border-box", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "10px 12px", color: "#f0f0f0", fontSize: 14, fontFamily: "inherit", outline: "none" }} />
+          </div>
+          <div style={{ display: "flex", gap: 12, marginTop: 8 }}>
+            <Btn variant="secondary" onClick={() => setShowAddAccount(false)} style={{ flex: 1 }}>Cancel</Btn>
+            <Btn variant="primary" onClick={handleAddAccount} style={{ flex: 1 }}>Add Account</Btn>
+          </div>
         </div>
       </Modal>
     </div>
@@ -797,6 +948,8 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
   const [cardFilter, setCardFilter] = useState("all");
   const [catFilter, setCatFilter] = useState("all");
   const [searchQ, setSearchQ] = useState("");
+  const [sortBy, setSortBy] = useState("date"); // "date" | "amount" | "merchant" | "category"
+  const [sortDir, setSortDir] = useState("desc"); // "asc" | "desc"
   const [editingExpense, setEditingExpense] = useState(null);
   const [editCategory, setEditCategory] = useState("");
   const [editNotes, setEditNotes] = useState("");
@@ -860,13 +1013,29 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
   const daysSoFar = Math.max(now.getDate(), 1);
   const dailyAvg = monthTotal / daysSoFar;
 
-  // Filtered expenses
+  // Filtered and sorted expenses
   const filtered = expenses.filter(e => {
     if (cardFilter !== "all" && e.cardLast4 !== cardFilter) return false;
     if (catFilter !== "all" && e.category !== catFilter) return false;
     if (searchQ && !e.merchant.toLowerCase().includes(searchQ.toLowerCase())) return false;
     return true;
+  }).sort((a, b) => {
+    let cmp = 0;
+    if (sortBy === "date") cmp = a.date.localeCompare(b.date);
+    else if (sortBy === "amount") cmp = a.amount - b.amount;
+    else if (sortBy === "merchant") cmp = a.merchant.localeCompare(b.merchant);
+    else if (sortBy === "category") cmp = a.category.localeCompare(b.category);
+    return sortDir === "asc" ? cmp : -cmp;
   });
+
+  const toggleSort = (field) => {
+    if (sortBy === field) {
+      setSortDir(d => d === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(field);
+      setSortDir(field === "date" || field === "amount" ? "desc" : "asc");
+    }
+  };
 
   // Categories in use
   const usedCategories = [...new Set(expenses.map(e => e.category))].sort();
@@ -1047,6 +1216,28 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
     return isNaN(d) ? new Date().toISOString().split("T")[0] : d.toISOString().split("T")[0];
   };
 
+  // Preview CSV data with smart categorization
+  const csvPreview = useMemo(() => {
+    if (!csvData.length || !csvMapping.date || !csvMapping.merchant || !csvMapping.amount) return [];
+    return csvData.slice(0, 100).map(row => {
+      const rawAmt = row[parseInt(csvMapping.amount)] || "0";
+      const amount = Math.abs(parseFloat(rawAmt.replace(/[^0-9.\-]/g, "")) || 0);
+      if (amount === 0) return null;
+      const merchant = row[parseInt(csvMapping.merchant)] || "Unknown Merchant";
+      const csvCat = csvMapping.category ? (row[parseInt(csvMapping.category)] || "") : "";
+      const smart = smartCategorize(merchant, categoryRules);
+      const category = csvCat && csvCat !== "Unknown" ? csvCat : smart.category;
+      return {
+        date: normalizeDate(row[parseInt(csvMapping.date)]),
+        merchant,
+        amount,
+        category,
+        confidence: csvCat && csvCat !== "Unknown" ? "csv" : smart.confidence,
+        source: csvCat && csvCat !== "Unknown" ? "csv" : smart.source,
+      };
+    }).filter(Boolean);
+  }, [csvData, csvMapping, categoryRules]);
+
   const handleImportCSV = () => {
     const card = csvCard || creditCards[0]?.last4 || "manual";
     const imported = csvData.map(row => {
@@ -1054,18 +1245,31 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
       const amount = Math.abs(parseFloat(rawAmt.replace(/[^0-9.\-]/g, "")) || 0);
       if (amount === 0) return null;
       const merchant = row[parseInt(csvMapping.merchant)] || "Unknown Merchant";
-      const csvCat = csvMapping.category ? (row[parseInt(csvMapping.category)] || "Unknown") : "Unknown";
-      const ruleCat = findCategoryRule(merchant, categoryRules);
-      const category = csvCat !== "Unknown" ? csvCat : (ruleCat || "Unknown");
+      const csvCat = csvMapping.category ? (row[parseInt(csvMapping.category)] || "") : "";
+      const smart = smartCategorize(merchant, categoryRules);
+      const category = csvCat && csvCat !== "Unknown" ? csvCat : smart.category;
       return {
         id: generateId(),
         date: normalizeDate(row[parseInt(csvMapping.date)]),
         merchant, amount, category,
         cardLast4: card,
-        recurring: false, receipt: null, notes: "Imported from CSV",
+        recurring: false, receipt: null,
+        notes: smart.source ? `Auto-categorized (${smart.source})` : "Imported from CSV",
         status: category !== "Unknown" ? "categorized" : "needs_review",
       };
     }).filter(Boolean);
+
+    // Learn new rules from this import (for merchants we auto-categorized)
+    const newRules = { ...categoryRules };
+    imported.forEach(exp => {
+      if (exp.category !== "Unknown" && !categoryRules[exp.merchant]) {
+        newRules[exp.merchant] = exp.category;
+      }
+    });
+    if (Object.keys(newRules).length > Object.keys(categoryRules).length) {
+      setCategoryRules(newRules);
+    }
+
     setExpenses(prev => [...imported, ...prev]);
     setShowImportModal(false); setImportMode("choose");
     setCsvData([]); setCsvColumns([]); setCsvMapping({ date: "", merchant: "", amount: "", category: "" });
@@ -1294,15 +1498,26 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
     const toImport = pdfParsed
       .filter(t => !pdfExcluded.has(t.id) && !t.isCredit)
       .map(t => {
-        const ruleCat = findCategoryRule(t.merchant, categoryRules);
-        const category = ruleCat || "Unknown";
+        const smart = smartCategorize(t.merchant, categoryRules);
         return {
           id: generateId(), date: t.date, merchant: t.merchant, amount: t.amount,
-          category, cardLast4: card, recurring: false, receipt: null,
-          notes: `Imported from ${t.source || pdfFileNames.join(", ")}`,
-          status: category !== "Unknown" ? "categorized" : "needs_review",
+          category: smart.category, cardLast4: card, recurring: false, receipt: null,
+          notes: smart.source ? `Auto-categorized (${smart.source})` : `Imported from ${t.source || pdfFileNames.join(", ")}`,
+          status: smart.category !== "Unknown" ? "categorized" : "needs_review",
         };
       });
+
+    // Learn new rules from this import
+    const newRules = { ...categoryRules };
+    toImport.forEach(exp => {
+      if (exp.category !== "Unknown" && !categoryRules[exp.merchant]) {
+        newRules[exp.merchant] = exp.category;
+      }
+    });
+    if (Object.keys(newRules).length > Object.keys(categoryRules).length) {
+      setCategoryRules(newRules);
+    }
+
     setExpenses(prev => [...toImport, ...prev]);
     setShowImportModal(false); setImportMode("choose");
     setPdfParsed([]); setPdfFileNames([]);
@@ -1474,7 +1689,7 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
       {/* ─── Expense Feed ─── */}
       {subTab === "feed" && (
         <div>
-          <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 12, marginBottom: 12, flexWrap: "wrap", alignItems: "center" }}>
             <div style={{ position: "relative", flex: 1, maxWidth: 300 }}>
               <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Search expenses..."
                 style={{ width: "100%", boxSizing: "border-box", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "8px 12px 8px 34px", color: "#f0f0f0", fontSize: 13, fontFamily: "inherit", outline: "none" }} />
@@ -1489,6 +1704,28 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
             {selectedIds.size > 0 && (
               <Btn variant="danger" icon="trash" onClick={bulkDelete}>{selectedIds.size} Selected — Delete</Btn>
             )}
+          </div>
+
+          {/* Sort Controls */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 16, alignItems: "center" }}>
+            <span style={{ fontSize: 12, color: "#666" }}>Sort by:</span>
+            {[
+              { key: "date", label: "Date" },
+              { key: "amount", label: "Amount" },
+              { key: "merchant", label: "Merchant" },
+              { key: "category", label: "Category" },
+            ].map(s => (
+              <button key={s.key} onClick={() => toggleSort(s.key)}
+                style={{
+                  padding: "4px 10px", borderRadius: 6, border: "none", fontSize: 11, fontWeight: 500,
+                  background: sortBy === s.key ? "#6366f1" : "rgba(255,255,255,0.04)",
+                  color: sortBy === s.key ? "#fff" : "#888",
+                  cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 4
+                }}>
+                {s.label}
+                {sortBy === s.key && <span style={{ fontSize: 10 }}>{sortDir === "asc" ? "↑" : "↓"}</span>}
+              </button>
+            ))}
           </div>
 
           <Table
@@ -1998,34 +2235,53 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
             </div>
             <Select label="Assign to Card" value={csvCard} onChange={setCsvCard}
               options={[{ value: "", label: "None / Manual" }, ...creditCards.map(c => ({ value: c.last4, label: `${c.brand} (****${c.last4})` }))]} />
-            <h4 style={{ fontSize: 13, fontWeight: 600, color: "#f0f0f0", marginBottom: 8, marginTop: 16 }}>Preview (first 5 rows)</h4>
-            <div style={{ overflowX: "auto", borderRadius: 8, border: "1px solid rgba(255,255,255,0.06)", marginBottom: 16 }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                <thead>
-                  <tr style={{ background: "rgba(255,255,255,0.03)" }}>
-                    {csvColumns.map((c, i) => (
-                      <th key={i} style={{ padding: "8px 10px", color: "#888", textAlign: "left", fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.06)",
-                        background: [csvMapping.date, csvMapping.merchant, csvMapping.amount, csvMapping.category].includes(String(i)) ? "rgba(99,102,241,0.08)" : "transparent" }}>
-                        {c}
-                        {csvMapping.date === String(i) && <Badge color="#6366f1" style={{ marginLeft: 4, fontSize: 9 }}>Date</Badge>}
-                        {csvMapping.merchant === String(i) && <Badge color="#10b981" style={{ marginLeft: 4, fontSize: 9 }}>Merchant</Badge>}
-                        {csvMapping.amount === String(i) && <Badge color="#f59e0b" style={{ marginLeft: 4, fontSize: 9 }}>Amount</Badge>}
-                        {csvMapping.category === String(i) && <Badge color="#8b5cf6" style={{ marginLeft: 4, fontSize: 9 }}>Category</Badge>}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {csvData.slice(0, 5).map((row, ri) => (
-                    <tr key={ri} style={{ borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
-                      {row.map((cell, ci) => (
-                        <td key={ci} style={{ padding: "6px 10px", color: "#ccc" }}>{cell}</td>
+            {/* Smart Categorization Preview */}
+            {csvPreview.length > 0 && (
+              <div style={{ marginTop: 16, marginBottom: 16 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <h4 style={{ fontSize: 13, fontWeight: 600, color: "#f0f0f0", margin: 0 }}>Smart Categorization Preview</h4>
+                  <div style={{ fontSize: 11, color: "#888" }}>
+                    <span style={{ color: "#10b981" }}>{csvPreview.filter(r => r.category !== "Unknown").length}</span> auto-categorized,
+                    <span style={{ color: "#f59e0b", marginLeft: 4 }}>{csvPreview.filter(r => r.category === "Unknown").length}</span> need review
+                  </div>
+                </div>
+                <div style={{ overflowX: "auto", borderRadius: 8, border: "1px solid rgba(255,255,255,0.06)", maxHeight: 280, overflowY: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                    <thead>
+                      <tr style={{ background: "rgba(255,255,255,0.03)", position: "sticky", top: 0 }}>
+                        <th style={{ padding: "8px 10px", color: "#888", textAlign: "left", fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>Date</th>
+                        <th style={{ padding: "8px 10px", color: "#888", textAlign: "left", fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>Merchant</th>
+                        <th style={{ padding: "8px 10px", color: "#888", textAlign: "right", fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>Amount</th>
+                        <th style={{ padding: "8px 10px", color: "#888", textAlign: "left", fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>Category</th>
+                        <th style={{ padding: "8px 10px", color: "#888", textAlign: "center", fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>Source</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {csvPreview.slice(0, 20).map((row, ri) => (
+                        <tr key={ri} style={{ borderBottom: "1px solid rgba(255,255,255,0.03)" }}>
+                          <td style={{ padding: "6px 10px", color: "#ccc" }}>{row.date}</td>
+                          <td style={{ padding: "6px 10px", color: "#f0f0f0", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{row.merchant}</td>
+                          <td style={{ padding: "6px 10px", color: "#ef4444", textAlign: "right", fontFamily: "monospace" }}>${row.amount.toFixed(2)}</td>
+                          <td style={{ padding: "6px 10px" }}>
+                            <Badge color={row.category === "Unknown" ? "#ef4444" : row.confidence === "high" ? "#10b981" : row.confidence === "medium" ? "#3b82f6" : "#f59e0b"}>
+                              {row.category}
+                            </Badge>
+                          </td>
+                          <td style={{ padding: "6px 10px", textAlign: "center" }}>
+                            {row.source === "learned" && <span title="From your saved rules" style={{ cursor: "help", fontSize: 10, color: "#10b981" }}>Learned</span>}
+                            {row.source === "pattern" && <span title="Matched common merchant pattern" style={{ cursor: "help", fontSize: 10, color: "#3b82f6" }}>Pattern</span>}
+                            {row.source === "fuzzy" && <span title="Fuzzy match to saved rule" style={{ cursor: "help", fontSize: 10, color: "#f59e0b" }}>Fuzzy</span>}
+                            {row.source === "csv" && <span title="From CSV file" style={{ cursor: "help", fontSize: 10, color: "#8b5cf6" }}>CSV</span>}
+                            {!row.source && <span style={{ fontSize: 10, color: "#666" }}>—</span>}
+                          </td>
+                        </tr>
                       ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                    </tbody>
+                  </table>
+                </div>
+                {csvPreview.length > 20 && <div style={{ fontSize: 11, color: "#888", marginTop: 8, textAlign: "center" }}>Showing 20 of {csvPreview.length} rows</div>}
+              </div>
+            )}
             <div style={{ display: "flex", justifyContent: "space-between" }}>
               <Btn variant="secondary" onClick={() => { setCsvData([]); setCsvColumns([]); }}>Choose Different File</Btn>
               <Btn onClick={handleImportCSV} disabled={!csvMapping.date || !csvMapping.merchant || !csvMapping.amount}>
@@ -2077,13 +2333,14 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
                     <th style={{ padding: "8px 10px", color: "#888", textAlign: "left", fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(30,30,46,0.95)" }}>Date</th>
                     <th style={{ padding: "8px 10px", color: "#888", textAlign: "left", fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(30,30,46,0.95)" }}>Description</th>
                     <th style={{ padding: "8px 10px", color: "#888", textAlign: "right", fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(30,30,46,0.95)" }}>Amount</th>
-                    <th style={{ padding: "8px 10px", color: "#888", textAlign: "center", fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(30,30,46,0.95)" }}>Type</th>
+                    <th style={{ padding: "8px 10px", color: "#888", textAlign: "left", fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(30,30,46,0.95)" }}>Category</th>
                     {pdfFileNames.length > 1 && <th style={{ padding: "8px 10px", color: "#888", textAlign: "left", fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(30,30,46,0.95)" }}>Source</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {pdfParsed.map(t => {
                     const excluded = pdfExcluded.has(t.id) || t.isCredit;
+                    const smart = t.isCredit ? null : smartCategorize(t.merchant, categoryRules);
                     return (
                       <tr key={t.id}
                         style={{ borderBottom: "1px solid rgba(255,255,255,0.03)", opacity: excluded ? 0.4 : 1 }}
@@ -2098,14 +2355,18 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
                           )}
                         </td>
                         <td style={{ padding: "6px 10px", color: "#ccc", whiteSpace: "nowrap" }}>{formatDate(t.date)}</td>
-                        <td style={{ padding: "6px 10px", color: excluded ? "#666" : "#f0f0f0", maxWidth: 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.merchant}</td>
+                        <td style={{ padding: "6px 10px", color: excluded ? "#666" : "#f0f0f0", maxWidth: 250, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.merchant}</td>
                         <td style={{ padding: "6px 10px", textAlign: "right", fontFamily: "'JetBrains Mono', monospace", fontWeight: 600, color: t.isCredit ? "#10b981" : "#ef4444" }}>
                           {t.isCredit ? "+" : "-"}{formatCurrency(t.amount)}
                         </td>
-                        <td style={{ padding: "6px 10px", textAlign: "center" }}>
-                          <Badge color={t.isCredit ? "#10b981" : "#6366f1"} style={{ fontSize: 9 }}>
-                            {t.isCredit ? "Credit" : "Charge"}
-                          </Badge>
+                        <td style={{ padding: "6px 10px" }}>
+                          {t.isCredit ? (
+                            <Badge color="#10b981" style={{ fontSize: 9 }}>Credit</Badge>
+                          ) : (
+                            <Badge color={smart?.category === "Unknown" ? "#ef4444" : smart?.confidence === "high" ? "#10b981" : smart?.confidence === "medium" ? "#3b82f6" : "#f59e0b"} style={{ fontSize: 9 }}>
+                              {smart?.category || "Unknown"}
+                            </Badge>
+                          )}
                         </td>
                         {pdfFileNames.length > 1 && <td style={{ padding: "6px 10px", color: "#888", fontSize: 11, maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.source}</td>}
                       </tr>
@@ -2116,13 +2377,23 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
             </div>
 
             {/* Summary */}
-            <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: 12, marginBottom: 16, display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-              <span style={{ color: "#888" }}>
-                {pdfParsed.filter(t => !t.isCredit && !pdfExcluded.has(t.id)).length} charges selected
-              </span>
-              <span style={{ color: "#ef4444", fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>
-                Total: -{formatCurrency(pdfParsed.filter(t => !t.isCredit && !pdfExcluded.has(t.id)).reduce((s, t) => s + t.amount, 0))}
-              </span>
+            <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                <span style={{ color: "#888" }}>
+                  {pdfParsed.filter(t => !t.isCredit && !pdfExcluded.has(t.id)).length} charges selected
+                </span>
+                <span style={{ color: "#ef4444", fontFamily: "'JetBrains Mono', monospace", fontWeight: 600 }}>
+                  Total: -{formatCurrency(pdfParsed.filter(t => !t.isCredit && !pdfExcluded.has(t.id)).reduce((s, t) => s + t.amount, 0))}
+                </span>
+              </div>
+              <div style={{ fontSize: 11, color: "#888" }}>
+                <span style={{ color: "#10b981" }}>
+                  {pdfParsed.filter(t => !t.isCredit && !pdfExcluded.has(t.id) && smartCategorize(t.merchant, categoryRules).category !== "Unknown").length}
+                </span> auto-categorized,{" "}
+                <span style={{ color: "#f59e0b" }}>
+                  {pdfParsed.filter(t => !t.isCredit && !pdfExcluded.has(t.id) && smartCategorize(t.merchant, categoryRules).category === "Unknown").length}
+                </span> need review
+              </div>
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -2922,29 +3193,27 @@ const NAV_ITEMS = [
 export default function App() {
   const [activeView, setActiveView] = useState(() => localStorage.getItem("sg_activeView") || "dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [transactions, setTransactions] = useState(() => loadState("cs_transactions", sampleTransactions));
-  const [invoices, setInvoices] = useState(() => loadState("cs_invoices", sampleInvoices));
-  const [inquiries, setInquiries] = useState(() => loadState("cs_inquiries", sampleInquiries));
-  const [contracts, setContracts] = useState(() => loadState("cs_contracts", []));
-  const [events, setEvents] = useState(() => loadState("cs_events", sampleEvents));
-  const [creditCards, setCreditCards] = useState(() => loadState("cs_creditCards", sampleCreditCards));
-  const [expenses, setExpenses] = useState(() => loadExpenses(sampleExpenses));
-  const [budgets, setBudgets] = useState(() => loadState("cs_budgets", {}));
-  const [categoryRules, setCategoryRules] = useState(() => loadState("cs_categoryRules", {}));
-  const [customCategories, setCustomCategories] = useState(() => loadState("cs_customCategories", []));
+
+  // Load all data from Supabase (with localStorage fallback)
+  const {
+    transactions, setTransactions,
+    invoices, setInvoices,
+    inquiries, setInquiries,
+    contracts, setContracts,
+    events, setEvents,
+    expenses, setExpenses,
+    creditCards, setCreditCards,
+    bankAccounts, setBankAccounts,
+    budgets, setBudgets,
+    categoryRules, setCategoryRules,
+    customCategories, setCustomCategories,
+    loading: dataLoading,
+    isSupabaseConfigured: usingSupabase
+  } = useSuiteGigData();
+
   const expenseCategories = [...DEFAULT_EXPENSE_CATEGORIES.filter(c => c !== "Unknown"), ...customCategories, "Unknown"];
 
   useEffect(() => { localStorage.setItem("sg_activeView", activeView); }, [activeView]);
-  useEffect(() => { saveState("cs_transactions", transactions); }, [transactions]);
-  useEffect(() => { saveState("cs_invoices", invoices); }, [invoices]);
-  useEffect(() => { saveState("cs_inquiries", inquiries); }, [inquiries]);
-  useEffect(() => { saveState("cs_contracts", contracts); }, [contracts]);
-  useEffect(() => { saveState("cs_events", events); }, [events]);
-  useEffect(() => { saveState("cs_creditCards", creditCards); }, [creditCards]);
-  useEffect(() => { saveExpenses(expenses); }, [expenses]);
-  useEffect(() => { saveState("cs_budgets", budgets); }, [budgets]);
-  useEffect(() => { saveState("cs_categoryRules", categoryRules); }, [categoryRules]);
-  useEffect(() => { saveState("cs_customCategories", customCategories); }, [customCategories]);
 
   const handleConvertToContract = (inquiry) => {
     const contract = {
@@ -3003,7 +3272,7 @@ export default function App() {
     switch (activeView) {
       case "dashboard": return <Dashboard transactions={transactions} invoices={invoices} inquiries={inquiries} events={events} />;
       case "tax": return <TaxManagement transactions={transactions} />;
-      case "banking": return <Banking transactions={transactions} setTransactions={setTransactions} expenseCategories={expenseCategories} />;
+      case "banking": return <Banking transactions={transactions} setTransactions={setTransactions} bankAccounts={bankAccounts} setBankAccounts={setBankAccounts} expenseCategories={expenseCategories} />;
       case "expenses": return <Expenses expenses={expenses} setExpenses={setExpenses} creditCards={creditCards} setCreditCards={setCreditCards} budgets={budgets} setBudgets={setBudgets} categoryRules={categoryRules} setCategoryRules={setCategoryRules} expenseCategories={expenseCategories} customCategories={customCategories} setCustomCategories={setCustomCategories} />;
       case "invoicing": return <Invoicing invoices={invoices} setInvoices={setInvoices} />;
       case "inquiries": return <InquiryManagement inquiries={inquiries} setInquiries={setInquiries} onConvertToContract={handleConvertToContract} />;
@@ -3049,7 +3318,11 @@ export default function App() {
 
         {!sidebarCollapsed && (
           <div style={{ padding: 16, borderTop: "1px solid rgba(255,255,255,0.04)", fontSize: 11, color: "#666" }}>
-            SuiteGig v1.0 · S Corp Mgmt
+            <div>SuiteGig v1.0</div>
+            <div style={{ marginTop: 4, display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{ width: 6, height: 6, borderRadius: "50%", background: usingSupabase ? "#10b981" : "#f59e0b" }}></span>
+              {usingSupabase ? "Supabase" : "Local Storage"}
+            </div>
           </div>
         )}
       </div>
@@ -3057,7 +3330,13 @@ export default function App() {
       {/* Main Content */}
       <div style={{ flex: 1, overflow: "auto", padding: 32 }}>
         <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-          {renderView()}
+          {dataLoading ? (
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "50vh", flexDirection: "column", gap: 16 }}>
+              <div style={{ width: 40, height: 40, border: "3px solid rgba(99,102,241,0.2)", borderTopColor: "#6366f1", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+              <div style={{ color: "#888", fontSize: 14 }}>Loading data{usingSupabase ? " from Supabase" : ""}...</div>
+            </div>
+          ) : renderView()}
         </div>
       </div>
     </div>
