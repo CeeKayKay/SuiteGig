@@ -2854,7 +2854,10 @@ const Invoicing = ({ invoices, setInvoices }) => {
 // ═══════════════════════════════════════════════════════
 
 const AIAgent = ({ inquiries, setInquiries, onSendToProposals }) => {
-  const [inputText, setInputText] = useState("");
+  // Persist input text to localStorage
+  const [inputText, setInputText] = useState(() => {
+    return localStorage.getItem("sg_aiagent_input") || "";
+  });
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [extractedData, setExtractedData] = useState(null);
@@ -2862,7 +2865,13 @@ const AIAgent = ({ inquiries, setInquiries, onSendToProposals }) => {
   const [outputMode, setOutputMode] = useState("inquiry"); // "inquiry" or "proposal"
   const [proposalData, setProposalData] = useState(null);
   const [generatedProposal, setGeneratedProposal] = useState("");
+  const [archivedInput, setArchivedInput] = useState(""); // Store input when processing
   const recognitionRef = useRef(null);
+
+  // Save input to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem("sg_aiagent_input", inputText);
+  }, [inputText]);
 
   // Parse text to extract inquiry information
   const parseInquiryText = (text) => {
@@ -3302,10 +3311,14 @@ Best regards,
   const processText = () => {
     if (!inputText.trim()) return;
     setIsProcessing(true);
+    // Archive the input for later reference
+    setArchivedInput(inputText);
 
     setTimeout(() => {
       if (outputMode === "inquiry") {
         const extracted = parseInquiryText(inputText);
+        // Include the original input in notes
+        extracted.notes = inputText;
         setExtractedData(extracted);
         setProposalData(null);
         setGeneratedProposal("");
@@ -3489,7 +3502,7 @@ Event With [Client Name]
             <Btn onClick={processText} disabled={!inputText.trim() || isProcessing} icon="sparkle">
               {isProcessing ? "Processing..." : outputMode === "inquiry" ? "Extract Information" : "Generate Proposal"}
             </Btn>
-            <Btn variant="secondary" onClick={() => { setInputText(""); setExtractedData(null); setProposalData(null); setGeneratedProposal(""); setEditMode(false); }}>
+            <Btn variant="secondary" onClick={() => { setInputText(""); setExtractedData(null); setProposalData(null); setGeneratedProposal(""); setEditMode(false); setArchivedInput(""); localStorage.removeItem("sg_aiagent_input"); }}>
               Clear
             </Btn>
           </div>
@@ -3678,6 +3691,7 @@ Event With [Client Name]
                       client: proposalData.organizationName || "",
                       content: generatedProposal,
                       extractedData: proposalData,
+                      sourceNotes: archivedInput, // Original input text
                       status: "draft",
                       createdDate: new Date().toISOString(),
                       lastModified: new Date().toISOString(),
@@ -3686,6 +3700,7 @@ Event With [Client Name]
                     setProposalData(null);
                     setGeneratedProposal("");
                     setInputText("");
+                    localStorage.removeItem("sg_aiagent_input"); // Clear saved input after sending
                   }
                 }}
                 icon="send"
@@ -3781,7 +3796,7 @@ Event With [Client Name]
 
 const ProposalEditor = ({ proposals, setProposals }) => {
   const [selectedProposal, setSelectedProposal] = useState(null);
-  const [showPreview, setShowPreview] = useState(false);
+  const [activeTab, setActiveTab] = useState("editor"); // "editor", "preview", "notes"
   const [isExporting, setIsExporting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null); // null, "saved", "error"
@@ -3926,7 +3941,7 @@ const ProposalEditor = ({ proposals, setProposals }) => {
     if (editorRef.current) {
       editorRef.current.innerHTML = content;
     }
-    setShowPreview(false);
+    setActiveTab("editor");
     setHasUnsavedChanges(false);
     setSaveStatus(null);
   };
@@ -4448,16 +4463,16 @@ const ProposalEditor = ({ proposals, setProposals }) => {
               </div>
             </div>
 
-            {/* Mode Toggle */}
+            {/* Mode Toggle - Tabs */}
             <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
               <button
-                onClick={() => setShowPreview(false)}
+                onClick={() => setActiveTab("editor")}
                 style={{
                   padding: "8px 16px",
                   borderRadius: 8,
                   border: "none",
-                  background: !showPreview ? "#6366f1" : "rgba(255,255,255,0.05)",
-                  color: !showPreview ? "#fff" : "#888",
+                  background: activeTab === "editor" ? "#6366f1" : "rgba(255,255,255,0.05)",
+                  color: activeTab === "editor" ? "#fff" : "#888",
                   fontSize: 13,
                   fontWeight: 500,
                   cursor: "pointer",
@@ -4467,13 +4482,13 @@ const ProposalEditor = ({ proposals, setProposals }) => {
                 Edit
               </button>
               <button
-                onClick={() => setShowPreview(true)}
+                onClick={() => setActiveTab("preview")}
                 style={{
                   padding: "8px 16px",
                   borderRadius: 8,
                   border: "none",
-                  background: showPreview ? "#10b981" : "rgba(255,255,255,0.05)",
-                  color: showPreview ? "#fff" : "#888",
+                  background: activeTab === "preview" ? "#10b981" : "rgba(255,255,255,0.05)",
+                  color: activeTab === "preview" ? "#fff" : "#888",
                   fontSize: 13,
                   fontWeight: 500,
                   cursor: "pointer",
@@ -4482,10 +4497,26 @@ const ProposalEditor = ({ proposals, setProposals }) => {
               >
                 Preview
               </button>
+              <button
+                onClick={() => setActiveTab("notes")}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: activeTab === "notes" ? "#f59e0b" : "rgba(255,255,255,0.05)",
+                  color: activeTab === "notes" ? "#fff" : "#888",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  transition: "all 0.15s"
+                }}
+              >
+                Source Notes
+              </button>
             </div>
 
             {/* Content Area */}
-            {!showPreview ? (
+            {activeTab === "editor" ? (
               <div>
 
                 {/* Rich Text Formatting Toolbar */}
@@ -4811,7 +4842,7 @@ const ProposalEditor = ({ proposals, setProposals }) => {
                   )}
                 </div>
               </div>
-            ) : (
+            ) : activeTab === "preview" ? (
               <div>
                 {/* PDF-like Preview */}
                 <div style={{
@@ -4868,6 +4899,75 @@ const ProposalEditor = ({ proposals, setProposals }) => {
                     Copy Text
                   </Btn>
                 </div>
+              </div>
+            ) : (
+              /* Source Notes Tab */
+              <div>
+                <div style={{
+                  background: "rgba(245,158,11,0.06)",
+                  borderRadius: 10,
+                  padding: 20,
+                  border: "1px solid rgba(245,158,11,0.2)"
+                }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+                    <Icon name="document" size={20} color="#f59e0b" />
+                    <h3 style={{ fontSize: 16, fontWeight: 600, color: "#f59e0b", margin: 0 }}>Original Input / Source Notes</h3>
+                  </div>
+                  <p style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>
+                    This is the original text that was used to generate this proposal. It's preserved here for reference.
+                  </p>
+                  {selectedProposal.sourceNotes ? (
+                    <div style={{
+                      background: "rgba(0,0,0,0.2)",
+                      borderRadius: 8,
+                      padding: 16,
+                      maxHeight: 400,
+                      overflowY: "auto"
+                    }}>
+                      <pre style={{
+                        whiteSpace: "pre-wrap",
+                        wordBreak: "break-word",
+                        fontSize: 13,
+                        lineHeight: 1.6,
+                        color: "#d1d5db",
+                        fontFamily: "'JetBrains Mono', monospace",
+                        margin: 0
+                      }}>
+                        {selectedProposal.sourceNotes}
+                      </pre>
+                    </div>
+                  ) : (
+                    <div style={{
+                      background: "rgba(0,0,0,0.2)",
+                      borderRadius: 8,
+                      padding: 24,
+                      textAlign: "center",
+                      color: "#666"
+                    }}>
+                      <Icon name="document" size={32} style={{ opacity: 0.3, marginBottom: 8 }} />
+                      <p style={{ margin: 0, fontSize: 13 }}>No source notes available for this proposal.</p>
+                      <p style={{ margin: "8px 0 0 0", fontSize: 11, color: "#555" }}>
+                        Source notes are automatically saved when you generate a proposal from the AI Agent.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Copy source notes button */}
+                {selectedProposal.sourceNotes && (
+                  <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+                    <Btn
+                      variant="secondary"
+                      onClick={() => {
+                        navigator.clipboard.writeText(selectedProposal.sourceNotes);
+                        alert("Source notes copied to clipboard!");
+                      }}
+                      icon="copy"
+                    >
+                      Copy Source Notes
+                    </Btn>
+                  </div>
+                )}
               </div>
             )}
 
