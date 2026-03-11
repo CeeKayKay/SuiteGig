@@ -104,6 +104,7 @@ const INQUIRY_PHASES = [
   { id: "proposal", label: "Proposal Sent", color: "#3b82f6" },
   { id: "negotiation", label: "Negotiation", color: "#8b5cf6" },
   { id: "confirmed", label: "Confirmed", color: "#10b981" },
+  { id: "released", label: "Released", color: "#ef4444" },
 ];
 
 const LEAD_GRADES = [
@@ -3366,11 +3367,33 @@ const InquiryManagement = ({ inquiries, setInquiries, onConvertToContract }) => 
               ))}
             </div>
 
-            {selectedInq.phase === "confirmed" && (
-              <Btn variant="success" onClick={() => { onConvertToContract(selectedInq); setSelectedInq(null); }}>
-                Convert to Contract →
-              </Btn>
-            )}
+            <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+              {selectedInq.phase === "confirmed" && (
+                <Btn variant="success" onClick={() => { onConvertToContract(selectedInq); setSelectedInq(null); }}>
+                  Convert to Contract →
+                </Btn>
+              )}
+              {selectedInq.phase !== "released" && (
+                <Btn variant="danger" onClick={() => {
+                  if (window.confirm(`Release "${selectedInq.name}"? This will mark the inquiry as lost/passed.`)) {
+                    updatePhase(selectedInq.id, "released");
+                    setSelectedInq(null);
+                  }
+                }}>
+                  Release
+                </Btn>
+              )}
+              {selectedInq.phase === "released" && (
+                <Btn variant="secondary" onClick={() => {
+                  if (window.confirm(`Permanently delete "${selectedInq.name}"?`)) {
+                    setInquiries(prev => prev.filter(i => i.id !== selectedInq.id));
+                    setSelectedInq(null);
+                  }
+                }} icon="trash">
+                  Delete
+                </Btn>
+              )}
+            </div>
           </div>
         )}
       </Modal>
