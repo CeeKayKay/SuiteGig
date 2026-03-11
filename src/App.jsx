@@ -251,6 +251,10 @@ const Icon = ({ name, size = 18 }) => {
     creditcard: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="1" y="4" width="22" height="16" rx="2"/><path d="M1 10h22"/><path d="M6 16h4m4 0h4"/></svg>,
     repeat: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 014-4h14M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>,
     piechart: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M21.21 15.89A10 10 0 118 2.83"/><path d="M22 12A10 10 0 0012 2v10z"/></svg>,
+    ai: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 2a4 4 0 014 4v1h1a3 3 0 013 3v8a3 3 0 01-3 3H7a3 3 0 01-3-3v-8a3 3 0 013-3h1V6a4 4 0 014-4z"/><circle cx="9" cy="13" r="1.5" fill="currentColor"/><circle cx="15" cy="13" r="1.5" fill="currentColor"/><path d="M9 17h6"/></svg>,
+    mic: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4m-4 0h8"/></svg>,
+    stop: <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>,
+    sparkle: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/></svg>,
   };
   return icons[name] || null;
 };
@@ -2845,6 +2849,410 @@ const Invoicing = ({ invoices, setInvoices }) => {
 };
 
 // ═══════════════════════════════════════════════════════
+// SECTION: AI AGENT - Process emails/voice/text into inquiries
+// ═══════════════════════════════════════════════════════
+
+const AIAgent = ({ inquiries, setInquiries }) => {
+  const [inputText, setInputText] = useState("");
+  const [isListening, setIsListening] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [extractedData, setExtractedData] = useState(null);
+  const [editMode, setEditMode] = useState(false);
+  const recognitionRef = useRef(null);
+
+  // Parse text to extract inquiry information
+  const parseInquiryText = (text) => {
+    const data = {
+      name: "",
+      contact: "",
+      email: "",
+      phone: "",
+      date: "",
+      time: "",
+      location: "",
+      guests: "",
+      value: 0,
+      serviceType: "",
+      notes: "",
+      source: "",
+      rawText: text,
+    };
+
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    const fullText = text.toLowerCase();
+
+    // Extract event name - look for patterns
+    const eventNamePatterns = [
+      /event\s*(?:named?|:)\s*([^\n]+)/i,
+      /for\s+event\s+([^\n]+?)(?:\s+on\s+)/i,
+      /(?:event|gig|show|performance):\s*([^\n]+)/i,
+      /subject:\s*([^\n]+)/i,
+    ];
+    for (const pattern of eventNamePatterns) {
+      const match = text.match(pattern);
+      if (match) { data.name = match[1].trim().replace(/\s+on\s+.*/i, ''); break; }
+    }
+
+    // Extract contact name
+    const contactPatterns = [
+      /(?:contact|client|from|submitted by):\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i,
+      /(?:Hi|Hello|Dear)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i,
+    ];
+    for (const pattern of contactPatterns) {
+      const match = text.match(pattern);
+      if (match && !match[1].toLowerCase().includes('team')) { data.contact = match[1].trim(); break; }
+    }
+
+    // Extract email
+    const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+    if (emailMatch) data.email = emailMatch[1];
+
+    // Extract phone
+    const phoneMatch = text.match(/(?:phone|tel|call|mobile)?:?\s*(\+?[\d\s\-().]{10,})/i);
+    if (phoneMatch) data.phone = phoneMatch[1].trim();
+
+    // Extract date - look for various formats
+    const datePatterns = [
+      /(?:date|on|scheduled for):\s*([A-Za-z]+\s+\d{1,2},?\s*\d{4})/i,
+      /(?:on\s+)?([A-Za-z]+(?:day)?\s+[A-Za-z]+\s+\d{1,2},?\s*\d{4})/i,
+      /(\d{1,2}\/\d{1,2}\/\d{2,4})/,
+      /([A-Za-z]+\s+\d{1,2},?\s*\d{4})/i,
+    ];
+    for (const pattern of datePatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        const dateStr = match[1].trim();
+        const parsed = new Date(dateStr.replace(/(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)\s*/i, ''));
+        if (!isNaN(parsed.getTime())) {
+          data.date = parsed.toISOString().split('T')[0];
+          break;
+        }
+      }
+    }
+
+    // Extract time
+    const timeMatch = text.match(/(?:time|from|start):\s*(\d{1,2}:\d{2}\s*(?:AM|PM)?)\s*(?:[-–]|to)?\s*(\d{1,2}:\d{2}\s*(?:AM|PM)?)?/i);
+    if (timeMatch) {
+      data.time = timeMatch[1] + (timeMatch[2] ? ` - ${timeMatch[2]}` : '');
+    }
+
+    // Extract location/venue
+    const locationPatterns = [
+      /(?:location|venue|at|place):\s*([^\n,]+(?:,\s*[^\n]+)?)/i,
+      /(?:at\s+(?:the\s+)?)([\w\s]+(?:ballroom|hall|center|hotel|venue|room|park|club))/i,
+    ];
+    for (const pattern of locationPatterns) {
+      const match = text.match(pattern);
+      if (match) { data.location = match[1].trim(); break; }
+    }
+
+    // Extract guest count
+    const guestMatch = text.match(/(?:approximately\s+)?(\d+)\s*(?:guests?|attendees?|people|pax)/i);
+    if (guestMatch) data.guests = guestMatch[1];
+
+    // Extract budget/value
+    const valuePatterns = [
+      /\$\s*([\d,]+(?:\.\d{2})?)/,
+      /USD\s*([\d,]+(?:\.\d{2})?)/i,
+      /(?:budget|rate|fee|paid|price)(?:\s*(?:of|:))?\s*\$?\s*([\d,]+(?:\.\d{2})?)/i,
+    ];
+    for (const pattern of valuePatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        data.value = parseFloat(match[1].replace(/,/g, ''));
+        break;
+      }
+    }
+
+    // Extract service type
+    const servicePatterns = [
+      /for\s+((?:roaming\s+)?(?:magician|magic|dj|band|photographer|videographer|caterer|florist|decorator|entertainer|performer|speaker|mc|host))/i,
+      /(?:looking for|need|want|hire)\s+(?:a\s+)?((?:roaming\s+)?(?:magician|magic|dj|band|photographer|videographer|caterer|florist|decorator|entertainer|performer|speaker|mc|host))/i,
+      /(?:magician|magic|dj|band|photographer|videographer|caterer|florist|decorator|entertainer|performer|speaker|mc|host)/i,
+    ];
+    for (const pattern of servicePatterns) {
+      const match = text.match(pattern);
+      if (match) { data.serviceType = match[1] || match[0]; break; }
+    }
+
+    // Extract source (platform/agency)
+    const sourcePatterns = [
+      /^([A-Z][a-zA-Z\s]+(?:Productions?|Agency|Events?|Entertainment))/m,
+      /(?:via|from|through)\s+([A-Z][a-zA-Z\s]+(?:Productions?|Agency|Events?|Entertainment))/i,
+    ];
+    for (const pattern of sourcePatterns) {
+      const match = text.match(pattern);
+      if (match) { data.source = match[1].trim(); break; }
+    }
+
+    // Build notes from remaining important info
+    const noteParts = [];
+    if (data.serviceType) noteParts.push(`Service: ${data.serviceType}`);
+    if (data.guests) noteParts.push(`Guests: ${data.guests}`);
+    if (data.time) noteParts.push(`Time: ${data.time}`);
+    if (data.location) noteParts.push(`Location: ${data.location}`);
+    if (data.source) noteParts.push(`Source: ${data.source}`);
+
+    // Look for additional notes
+    const notesMatch = text.match(/(?:notes?|comments?|details?)(?:\s*(?:to\s+talent)?:)?\s*([^\n]+(?:\n[^\n]+)*)/i);
+    if (notesMatch && notesMatch[1].length > 20) {
+      noteParts.push(notesMatch[1].trim().substring(0, 500));
+    }
+
+    data.notes = noteParts.join('\n');
+
+    // Generate event name if not found
+    if (!data.name && data.contact) {
+      data.name = data.serviceType
+        ? `${data.contact} - ${data.serviceType}`
+        : `${data.contact} Event`;
+    }
+
+    return data;
+  };
+
+  // Process the input text
+  const processText = () => {
+    if (!inputText.trim()) return;
+    setIsProcessing(true);
+
+    setTimeout(() => {
+      const extracted = parseInquiryText(inputText);
+      setExtractedData(extracted);
+      setIsProcessing(false);
+      setEditMode(true);
+    }, 500);
+  };
+
+  // Voice recognition
+  const startListening = () => {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+      alert('Voice recognition is not supported in your browser. Try Chrome or Edge.');
+      return;
+    }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognitionRef.current = new SpeechRecognition();
+    recognitionRef.current.continuous = true;
+    recognitionRef.current.interimResults = true;
+
+    recognitionRef.current.onresult = (event) => {
+      let transcript = '';
+      for (let i = 0; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
+      }
+      setInputText(transcript);
+    };
+
+    recognitionRef.current.onerror = (event) => {
+      console.error('Speech recognition error:', event.error);
+      setIsListening(false);
+    };
+
+    recognitionRef.current.onend = () => {
+      setIsListening(false);
+    };
+
+    recognitionRef.current.start();
+    setIsListening(true);
+  };
+
+  const stopListening = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+    }
+    setIsListening(false);
+  };
+
+  // Save to inquiries
+  const saveInquiry = () => {
+    if (!extractedData) return;
+
+    const inquiry = {
+      id: generateId(),
+      name: extractedData.name || "New Inquiry",
+      contact: extractedData.contact || "",
+      email: extractedData.email || "",
+      phone: extractedData.phone || "",
+      phase: "new",
+      grade: extractedData.value >= 5000 ? "A" : extractedData.value >= 2000 ? "B" : "C",
+      date: extractedData.date || "",
+      value: extractedData.value || 0,
+      notes: extractedData.notes || "",
+      nextSteps: "Review inquiry and follow up",
+    };
+
+    setInquiries(prev => [...prev, inquiry]);
+    setExtractedData(null);
+    setInputText("");
+    setEditMode(false);
+    alert(`Inquiry "${inquiry.name}" saved successfully!`);
+  };
+
+  // Update extracted field
+  const updateField = (field, value) => {
+    setExtractedData(prev => ({ ...prev, [field]: value }));
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+        <div>
+          <h2 style={{ fontSize: 24, fontWeight: 700, color: "#f0f0f0" }}>AI Agent</h2>
+          <p style={{ color: "#888", fontSize: 14 }}>Process emails, voice, or text to extract gig inquiry information</p>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: editMode ? "1fr 1fr" : "1fr", gap: 24 }}>
+        {/* Input Section */}
+        <div style={{ background: "#1a1d23", borderRadius: 14, padding: 24, border: "1px solid rgba(255,255,255,0.05)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <h3 style={{ fontSize: 16, fontWeight: 600, color: "#f0f0f0" }}>Input</h3>
+            <div style={{ display: "flex", gap: 8 }}>
+              <Btn
+                variant={isListening ? "danger" : "secondary"}
+                icon={isListening ? "stop" : "mic"}
+                onClick={isListening ? stopListening : startListening}
+              >
+                {isListening ? "Stop Recording" : "Voice Input"}
+              </Btn>
+            </div>
+          </div>
+
+          {isListening && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "12px 16px", background: "rgba(239,68,68,0.1)", borderRadius: 8, marginBottom: 16, border: "1px solid rgba(239,68,68,0.2)" }}>
+              <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#ef4444", animation: "pulse 1s infinite" }} />
+              <span style={{ color: "#ef4444", fontSize: 13 }}>Listening... Speak clearly</span>
+            </div>
+          )}
+
+          <textarea
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            placeholder="Paste an email thread, forward, or type/dictate information about a gig inquiry...
+
+Example:
+- Email from booking agency
+- Salesforce notification
+- Voice note about a new lead
+- Any text describing an event inquiry"
+            style={{
+              width: "100%", minHeight: 300, padding: 16, borderRadius: 10,
+              background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)",
+              color: "#f0f0f0", fontSize: 13, fontFamily: "'JetBrains Mono', monospace",
+              resize: "vertical", outline: "none"
+            }}
+          />
+
+          <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+            <Btn onClick={processText} disabled={!inputText.trim() || isProcessing} icon="sparkle">
+              {isProcessing ? "Processing..." : "Extract Information"}
+            </Btn>
+            <Btn variant="secondary" onClick={() => { setInputText(""); setExtractedData(null); setEditMode(false); }}>
+              Clear
+            </Btn>
+          </div>
+
+          {/* Quick tips */}
+          <div style={{ marginTop: 20, padding: 16, background: "rgba(99,102,241,0.06)", borderRadius: 10, border: "1px solid rgba(99,102,241,0.15)" }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#a5b4fc", marginBottom: 8 }}>Tips for best results:</div>
+            <ul style={{ margin: 0, paddingLeft: 20, color: "#888", fontSize: 12, lineHeight: 1.6 }}>
+              <li>Include the event date (e.g., "April 2, 2026" or "04/02/2026")</li>
+              <li>Mention budget or rate (e.g., "$2,500" or "USD 2,500")</li>
+              <li>Include guest count (e.g., "200 guests" or "approximately 150 attendees")</li>
+              <li>Specify location/venue name</li>
+              <li>Include contact email for follow-up</li>
+            </ul>
+          </div>
+        </div>
+
+        {/* Extracted Data Section */}
+        {editMode && extractedData && (
+          <div style={{ background: "#1a1d23", borderRadius: 14, padding: 24, border: "1px solid rgba(255,255,255,0.05)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 600, color: "#f0f0f0", display: "flex", alignItems: "center", gap: 8 }}>
+                <Icon name="check" size={18} /> Extracted Information
+              </h3>
+              <Badge color="#10b981">Ready to Save</Badge>
+            </div>
+
+            <div style={{ display: "grid", gap: 14 }}>
+              <Input label="Event Name *" value={extractedData.name} onChange={(v) => updateField("name", v)} />
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <Input label="Contact Name" value={extractedData.contact} onChange={(v) => updateField("contact", v)} />
+                <Input label="Email" value={extractedData.email} onChange={(v) => updateField("email", v)} />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <Input label="Phone" value={extractedData.phone} onChange={(v) => updateField("phone", v)} />
+                <Input label="Event Date" type="date" value={extractedData.date} onChange={(v) => updateField("date", v)} />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <Input label="Budget ($)" type="number" value={extractedData.value} onChange={(v) => updateField("value", parseFloat(v) || 0)} />
+                <Input label="Guest Count" value={extractedData.guests} onChange={(v) => updateField("guests", v)} />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <Input label="Service Type" value={extractedData.serviceType} onChange={(v) => updateField("serviceType", v)} />
+                <Input label="Location/Venue" value={extractedData.location} onChange={(v) => updateField("location", v)} />
+              </div>
+
+              <Input label="Source/Agency" value={extractedData.source} onChange={(v) => updateField("source", v)} />
+
+              <TextArea label="Notes" value={extractedData.notes} onChange={(v) => updateField("notes", v)} rows={4} />
+
+              <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                <Btn onClick={saveInquiry} icon="plus">Save as Inquiry</Btn>
+                <Btn variant="secondary" onClick={() => { setEditMode(false); setExtractedData(null); }}>Cancel</Btn>
+              </div>
+            </div>
+
+            {/* Original text reference */}
+            <div style={{ marginTop: 20, padding: 12, background: "rgba(255,255,255,0.02)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.05)" }}>
+              <div style={{ fontSize: 11, color: "#666", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>Original Text</div>
+              <div style={{ fontSize: 11, color: "#888", maxHeight: 100, overflowY: "auto", whiteSpace: "pre-wrap", fontFamily: "'JetBrains Mono', monospace" }}>
+                {extractedData.rawText}
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Recent inquiries created */}
+      {inquiries.length > 0 && (
+        <div style={{ marginTop: 32 }}>
+          <h3 style={{ fontSize: 14, fontWeight: 600, color: "#888", marginBottom: 16 }}>Recent Inquiries ({inquiries.length})</h3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
+            {inquiries.slice(0, 6).map(inq => (
+              <div key={inq.id} style={{ background: "#1a1d23", borderRadius: 10, padding: 16, border: "1px solid rgba(255,255,255,0.05)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "#f0f0f0" }}>{inq.name}</div>
+                  <Badge color={inq.grade === "A" ? "#10b981" : inq.grade === "B" ? "#f59e0b" : "#888"}>{inq.grade}</Badge>
+                </div>
+                <div style={{ fontSize: 12, color: "#888" }}>{inq.contact}</div>
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 8, fontSize: 12 }}>
+                  <span style={{ color: "#6366f1" }}>{formatDate(inq.date)}</span>
+                  <span style={{ color: "#10b981", fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(inq.value)}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+      `}</style>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════
 // SECTION: INQUIRY MANAGEMENT
 // ═══════════════════════════════════════════════════════
 
@@ -3434,6 +3842,7 @@ const Payments = ({ invoices, transactions }) => {
 
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: "dashboard" },
+  { id: "aiagent", label: "AI Agent", icon: "ai" },
   { id: "tax", label: "S Corp Tax", icon: "tax" },
   { id: "banking", label: "Banking", icon: "bank" },
   { id: "expenses", label: "Expenses", icon: "receipt" },
@@ -3527,6 +3936,7 @@ export default function App() {
   const renderView = () => {
     switch (activeView) {
       case "dashboard": return <Dashboard transactions={transactions} invoices={invoices} inquiries={inquiries} events={events} />;
+      case "aiagent": return <AIAgent inquiries={inquiries} setInquiries={setInquiries} />;
       case "tax": return <TaxManagement transactions={transactions} />;
       case "banking": return <Banking transactions={transactions} setTransactions={setTransactions} bankAccounts={bankAccounts} setBankAccounts={setBankAccounts} expenseCategories={expenseCategories} />;
       case "expenses": return <Expenses expenses={expenses} setExpenses={setExpenses} creditCards={creditCards} setCreditCards={setCreditCards} budgets={budgets} setBudgets={setBudgets} categoryRules={categoryRules} setCategoryRules={setCategoryRules} expenseCategories={expenseCategories} customCategories={customCategories} setCustomCategories={setCustomCategories} />;
