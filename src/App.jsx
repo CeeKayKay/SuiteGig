@@ -4548,15 +4548,16 @@ const ProposalEditor = ({ proposals, setProposals }) => {
                     document.execCommand('insertHTML', false, text);
                   }}
                   dangerouslySetInnerHTML={{ __html: editedContent }}
+                  className="proposal-editor-content"
                   style={{
                     width: "100%",
                     minHeight: 450,
-                    padding: 20,
+                    padding: 24,
                     borderRadius: "0 0 10px 10px",
-                    background: "rgba(255,255,255,0.03)",
+                    background: "#1e2128",
                     border: hasUnsavedChanges ? "1px solid rgba(245,158,11,0.3)" : "1px solid rgba(255,255,255,0.08)",
                     borderTop: "none",
-                    color: "#f0f0f0",
+                    color: "#e5e7eb",
                     fontSize: 14,
                     fontFamily: "'Inter', -apple-system, sans-serif",
                     outline: "none",
@@ -4566,6 +4567,66 @@ const ProposalEditor = ({ proposals, setProposals }) => {
                   }}
                   suppressContentEditableWarning={true}
                 />
+                <style>{`
+                  .proposal-editor-content h1 {
+                    font-size: 24px;
+                    font-weight: 700;
+                    color: #a5b4fc;
+                    margin: 24px 0 16px 0;
+                    text-align: center;
+                  }
+                  .proposal-editor-content h2 {
+                    font-size: 16px;
+                    font-weight: 600;
+                    color: #a5b4fc;
+                    margin: 24px 0 12px 0;
+                    padding-bottom: 8px;
+                    border-bottom: 2px solid rgba(99,102,241,0.3);
+                    text-transform: uppercase;
+                    letter-spacing: 0.05em;
+                  }
+                  .proposal-editor-content h3 {
+                    font-size: 14px;
+                    font-weight: 600;
+                    color: #c4b5fd;
+                    margin: 16px 0 8px 0;
+                  }
+                  .proposal-editor-content p {
+                    margin: 8px 0;
+                    color: #e5e7eb;
+                  }
+                  .proposal-editor-content ul, .proposal-editor-content ol {
+                    margin: 12px 0;
+                    padding-left: 24px;
+                  }
+                  .proposal-editor-content li {
+                    margin: 6px 0;
+                    color: #d1d5db;
+                  }
+                  .proposal-editor-content strong {
+                    color: #f9fafb;
+                    font-weight: 600;
+                  }
+                  .proposal-editor-content em {
+                    color: #9ca3af;
+                  }
+                  .proposal-editor-content hr {
+                    border: none;
+                    border-top: 1px solid rgba(255,255,255,0.1);
+                    margin: 20px 0;
+                  }
+                  .proposal-editor-content a {
+                    color: #818cf8;
+                    text-decoration: underline;
+                  }
+                  .proposal-editor-content blockquote {
+                    border-left: 3px solid #6366f1;
+                    padding-left: 16px;
+                    margin: 16px 0;
+                    color: #9ca3af;
+                    font-style: italic;
+                  }
+                `}</style>
 
                 {/* Editor Info */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, fontSize: 11, color: "#666" }}>
@@ -5752,8 +5813,62 @@ export default function App() {
     setActiveView("contracts");
   };
 
+  // Convert plain text proposal to formatted HTML for rich text editor
+  const convertProposalToHTML = (text) => {
+    if (!text) return '';
+
+    let html = text
+      // Remove ASCII box characters
+      .replace(/═+/g, '')
+      .replace(/─+/g, '')
+      // Convert main title
+      .replace(/^\s*EVENT PROPOSAL\s*$/gm, '<h1 style="text-align: center; color: #6366f1; margin: 20px 0;">EVENT PROPOSAL</h1>')
+      // Convert section headers (ALL CAPS lines)
+      .replace(/^\s*([A-Z][A-Z\s&]+)\s*$/gm, (match, title) => {
+        const trimmed = title.trim();
+        if (trimmed === 'EVENT PROPOSAL') return match; // Already handled
+        return `<h2 style="color: #6366f1; border-bottom: 2px solid #6366f1; padding-bottom: 8px; margin-top: 24px;">${trimmed}</h2>`;
+      })
+      // Convert bullet points
+      .replace(/^\s*[•]\s*(.+)$/gm, '<li>$1</li>')
+      // Convert checkmarks
+      .replace(/^\s*[✓]\s*(.+)$/gm, '<li style="color: #10b981;">✓ $1</li>')
+      // Convert numbered items
+      .replace(/^\s*(\d+)\.\s+(.+)$/gm, '<li><strong>$1.</strong> $2</li>')
+      // Convert key-value pairs (like "Date: March 11")
+      .replace(/^([A-Za-z][A-Za-z\s&]+):\s*(.+)$/gm, '<p><strong>$1:</strong> $2</p>')
+      // Convert signature section
+      .replace(/Best regards,/g, '<p style="margin-top: 32px;"><em>Best regards,</em></p>')
+      .replace(/\[YOUR NAME\]/g, '<p><strong>[YOUR NAME]</strong></p>')
+      .replace(/\[YOUR COMPANY\]/g, '<p>[YOUR COMPANY]</p>')
+      .replace(/\[CONTACT INFO\]/g, '<p>[CONTACT INFO]</p>')
+      // Wrap consecutive list items in ul
+      .replace(/(<li[^>]*>.*?<\/li>\s*)+/g, '<ul style="margin: 12px 0; padding-left: 24px;">$&</ul>')
+      // Convert remaining line breaks to paragraphs
+      .split('\n')
+      .map(line => {
+        const trimmed = line.trim();
+        if (!trimmed) return '';
+        if (trimmed.startsWith('<')) return trimmed; // Already HTML
+        return `<p>${trimmed}</p>`;
+      })
+      .join('\n')
+      // Clean up empty paragraphs
+      .replace(/<p>\s*<\/p>/g, '')
+      .replace(/<p><\/p>/g, '');
+
+    return html;
+  };
+
   const handleSendToProposals = (proposal) => {
-    setProposals(prev => [proposal, ...prev]);
+    // Convert plain text content to HTML for rich text editor
+    const htmlContent = convertProposalToHTML(proposal.content);
+    const enhancedProposal = {
+      ...proposal,
+      content: htmlContent,
+      originalContent: proposal.content // Keep original for reference
+    };
+    setProposals(prev => [enhancedProposal, ...prev]);
     setActiveView("proposals");
   };
 
