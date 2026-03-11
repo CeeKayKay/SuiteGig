@@ -3946,12 +3946,12 @@ const ProposalEditor = ({ proposals, setProposals }) => {
     setSaveStatus(null);
   };
 
-  // Set editor content when ref becomes available
+  // Set editor content when ref becomes available or when switching back to editor tab
   useEffect(() => {
-    if (editorRef.current && selectedProposal && editedContentRef.current) {
+    if (editorRef.current && selectedProposal && editedContentRef.current && activeTab === "editor") {
       editorRef.current.innerHTML = editedContentRef.current;
     }
-  }, [selectedProposal]);
+  }, [selectedProposal, activeTab]);
 
   // Save changes to proposal
   const handleSaveChanges = () => {
