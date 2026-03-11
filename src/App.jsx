@@ -3781,13 +3781,13 @@ Event With [Client Name]
 
 const ProposalEditor = ({ proposals, setProposals }) => {
   const [selectedProposal, setSelectedProposal] = useState(null);
-  const [editedContent, setEditedContent] = useState("");
   const [showPreview, setShowPreview] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null); // null, "saved", "error"
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const editorRef = useRef(null);
+  const editedContentRef = useRef(""); // Use ref to avoid re-renders on typing
 
   // Proposal template settings
   const [companySettings, setCompanySettings] = useState(() => {
@@ -3921,18 +3921,22 @@ const ProposalEditor = ({ proposals, setProposals }) => {
     setSelectedProposal(proposal);
     // Convert ASCII to HTML if needed
     const content = convertAsciiToHTML(proposal.content);
-    setEditedContent(content);
+    editedContentRef.current = content;
+    // Set editor innerHTML directly to avoid re-render issues
+    if (editorRef.current) {
+      editorRef.current.innerHTML = content;
+    }
     setShowPreview(false);
     setHasUnsavedChanges(false);
     setSaveStatus(null);
   };
 
-  // Track content changes
-  const handleContentChange = (newContent) => {
-    setEditedContent(newContent);
-    setHasUnsavedChanges(newContent !== selectedProposal?.content);
-    setSaveStatus(null);
-  };
+  // Set editor content when ref becomes available
+  useEffect(() => {
+    if (editorRef.current && selectedProposal && editedContentRef.current) {
+      editorRef.current.innerHTML = editedContentRef.current;
+    }
+  }, [selectedProposal]);
 
   // Save changes to proposal
   const handleSaveChanges = () => {
@@ -3941,9 +3945,10 @@ const ProposalEditor = ({ proposals, setProposals }) => {
     setSaveStatus(null);
 
     try {
+      const currentContent = editorRef.current ? editorRef.current.innerHTML : editedContentRef.current;
       const updated = {
         ...selectedProposal,
-        content: editedContent,
+        content: currentContent,
         lastModified: new Date().toISOString()
       };
 
@@ -4201,7 +4206,7 @@ const ProposalEditor = ({ proposals, setProposals }) => {
     </div>
 
     <div class="content">
-      ${formatProposalForPDF(editedContent)}
+      ${formatProposalForPDF(editorRef.current?.innerHTML || editedContentRef.current)}
     </div>
 
     <div class="signature-line">
@@ -4654,10 +4659,11 @@ const ProposalEditor = ({ proposals, setProposals }) => {
                     ref={editorRef}
                     contentEditable
                     onInput={(e) => {
-                      const content = e.currentTarget.innerHTML;
-                      setEditedContent(content);
-                      setHasUnsavedChanges(content !== selectedProposal?.content);
-                      setSaveStatus(null);
+                      // Store content in ref (no re-render)
+                      editedContentRef.current = e.currentTarget.innerHTML;
+                      // Only update UI state for save button, not content
+                      if (!hasUnsavedChanges) setHasUnsavedChanges(true);
+                      if (saveStatus) setSaveStatus(null);
                     }}
                     onKeyDown={(e) => {
                       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
@@ -4669,8 +4675,9 @@ const ProposalEditor = ({ proposals, setProposals }) => {
                       e.preventDefault();
                       const text = e.clipboardData.getData('text/html') || e.clipboardData.getData('text/plain');
                       document.execCommand('insertHTML', false, text);
+                      editedContentRef.current = editorRef.current?.innerHTML || '';
+                      if (!hasUnsavedChanges) setHasUnsavedChanges(true);
                     }}
-                    dangerouslySetInnerHTML={{ __html: editedContent }}
                     className="proposal-editor-content"
                     style={{
                       minHeight: 400,
@@ -4771,7 +4778,7 @@ const ProposalEditor = ({ proposals, setProposals }) => {
                 {/* Editor Info */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, fontSize: 11, color: "#666" }}>
                   <span>Rich text editor • Ctrl+B Bold • Ctrl+I Italic • Ctrl+S Save</span>
-                  <span>{editedContent.replace(/<[^>]*>/g, '').length} characters</span>
+                  <span>Click to edit</span>
                 </div>
 
                 <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
@@ -4838,9 +4845,10 @@ const ProposalEditor = ({ proposals, setProposals }) => {
                   </div>
 
                   {/* Content */}
-                  <div style={{ whiteSpace: "pre-wrap", fontSize: 12, lineHeight: 1.7 }}>
-                    {editedContent}
-                  </div>
+                  <div
+                    style={{ fontSize: 12, lineHeight: 1.7 }}
+                    dangerouslySetInnerHTML={{ __html: editorRef.current?.innerHTML || editedContentRef.current }}
+                  />
                 </div>
 
                 {/* Export Actions */}
@@ -4851,7 +4859,8 @@ const ProposalEditor = ({ proposals, setProposals }) => {
                   <Btn
                     variant="secondary"
                     onClick={() => {
-                      navigator.clipboard.writeText(editedContent);
+                      const text = (editorRef.current?.innerHTML || editedContentRef.current).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+                      navigator.clipboard.writeText(text);
                       alert("Proposal copied to clipboard!");
                     }}
                     icon="copy"
