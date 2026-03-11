@@ -342,7 +342,7 @@ const Table = ({ columns, data, onRowClick }) => (
         <tr style={{ background: "rgba(255,255,255,0.03)" }}>
           {columns.map(col => (
             <th key={col.key} style={{ textAlign: col.align || "left", padding: "12px 16px", fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600, borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-              {col.label}
+              {col.headerRender ? col.headerRender() : col.label}
             </th>
           ))}
         </tr>
@@ -1219,6 +1219,12 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
     setSelectedIds(new Set());
   };
 
+  const bulkAssignCard = (cardLast4) => {
+    if (!cardLast4) return;
+    setExpenses(prev => prev.map(e => selectedIds.has(e.id) ? { ...e, cardLast4 } : e));
+    setSelectedIds(new Set());
+  };
+
   const toggleSelect = (id, e) => {
     e?.stopPropagation();
     setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -1783,7 +1789,12 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
               options={[{ value: "all", label: "All Categories" }, ...usedCategories.map(c => ({ value: c, label: c }))]}
               style={{ marginBottom: 0, minWidth: 160 }} />
             {selectedIds.size > 0 && (
-              <Btn variant="danger" icon="trash" onClick={bulkDelete}>{selectedIds.size} Selected — Delete</Btn>
+              <>
+                <Select label="" value="" onChange={bulkAssignCard}
+                  options={[{ value: "", label: `Assign ${selectedIds.size} to Card...` }, { value: "manual", label: "Manual Entry" }, ...creditCards.map(c => ({ value: c.last4, label: `${c.brand} (****${c.last4})` }))]}
+                  style={{ marginBottom: 0, minWidth: 180 }} />
+                <Btn variant="danger" icon="trash" onClick={bulkDelete}>Delete {selectedIds.size}</Btn>
+              </>
             )}
           </div>
 
@@ -1811,7 +1822,13 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
 
           <Table
             columns={[
-              { key: "select", label: "", render: r => (
+              { key: "select", label: "", headerRender: () => (
+                <input type="checkbox"
+                  checked={selectedIds.size === filtered.length && filtered.length > 0}
+                  onChange={toggleSelectAll}
+                  title={selectedIds.size === filtered.length ? "Deselect all" : "Select all"}
+                  style={{ width: 15, height: 15, accentColor: "#6366f1", cursor: "pointer" }} />
+              ), render: r => (
                 <input type="checkbox" checked={selectedIds.has(r.id)} onChange={(e) => toggleSelect(r.id, e)}
                   style={{ width: 15, height: 15, accentColor: "#6366f1", cursor: "pointer" }} />
               )},
@@ -1843,11 +1860,7 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
           />
           {filtered.length > 0 && (
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12, fontSize: 12, color: "#666" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
-                <input type="checkbox" checked={selectedIds.size === filtered.length && filtered.length > 0}
-                  onChange={toggleSelectAll} style={{ accentColor: "#6366f1" }} />
-                Select all ({filtered.length})
-              </label>
+              <span>{selectedIds.size > 0 ? `${selectedIds.size} of ${filtered.length} selected` : `${filtered.length} expenses`}</span>
               <span>Total: <strong style={{ color: "#ef4444" }}>-{formatCurrency(filtered.reduce((s, e) => s + e.amount, 0))}</strong></span>
             </div>
           )}
