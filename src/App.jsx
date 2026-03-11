@@ -4374,22 +4374,6 @@ const ProposalEditor = ({ proposals, setProposals }) => {
             {/* Content Area */}
             {!showPreview ? (
               <div>
-                {/* Unsaved changes indicator */}
-                {hasUnsavedChanges && (
-                  <div style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 8,
-                    padding: "8px 12px",
-                    background: "rgba(245,158,11,0.1)",
-                    borderRadius: 8,
-                    marginBottom: 12,
-                    border: "1px solid rgba(245,158,11,0.2)"
-                  }}>
-                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#f59e0b" }} />
-                    <span style={{ fontSize: 12, color: "#f59e0b" }}>Unsaved changes</span>
-                  </div>
-                )}
 
                 {/* Rich Text Formatting Toolbar */}
                 <div style={{
@@ -4524,76 +4508,124 @@ const ProposalEditor = ({ proposals, setProposals }) => {
                   </div>
                 </div>
 
-                {/* Rich Text Editor */}
-                <div
-                  ref={editorRef}
-                  contentEditable
-                  onInput={(e) => {
-                    const content = e.currentTarget.innerHTML;
-                    setEditedContent(content);
-                    setHasUnsavedChanges(content !== selectedProposal?.content);
-                    setSaveStatus(null);
-                  }}
-                  onKeyDown={(e) => {
-                    // Ctrl/Cmd + S to save
-                    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                {/* WYSIWYG Document Editor - looks like the final PDF */}
+                <div style={{
+                  background: "#fff",
+                  borderRadius: 8,
+                  boxShadow: "0 4px 20px rgba(0,0,0,0.3)",
+                  overflow: "hidden"
+                }}>
+                  {/* Document Header - matches PDF */}
+                  <div style={{
+                    padding: "32px 48px 24px 48px",
+                    borderBottom: `3px solid ${companySettings.accentColor}`,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "flex-start",
+                    background: "#fff"
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                      {companySettings.logo && (
+                        <img src={companySettings.logo} alt="Logo" style={{ width: 60, height: 60, objectFit: "contain" }} />
+                      )}
+                      <div>
+                        <h1 style={{ fontSize: 22, fontWeight: 700, color: companySettings.accentColor, margin: 0 }}>{companySettings.companyName}</h1>
+                        <p style={{ fontSize: 12, color: "#6b7280", margin: "4px 0 0 0" }}>{companySettings.contactName}</p>
+                        <p style={{ fontSize: 12, color: "#6b7280", margin: 0 }}>{companySettings.email} | {companySettings.phone}</p>
+                      </div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <strong style={{ fontSize: 14, color: "#1f2937" }}>PROPOSAL</strong>
+                      <p style={{ fontSize: 11, color: "#6b7280", margin: "4px 0 0 0" }}>Date: {new Date().toLocaleDateString()}</p>
+                      <p style={{ fontSize: 11, color: "#6b7280", margin: 0 }}>For: {selectedProposal?.client || 'Client'}</p>
+                    </div>
+                  </div>
+
+                  {/* Editable Document Content */}
+                  <div
+                    ref={editorRef}
+                    contentEditable
+                    onInput={(e) => {
+                      const content = e.currentTarget.innerHTML;
+                      setEditedContent(content);
+                      setHasUnsavedChanges(content !== selectedProposal?.content);
+                      setSaveStatus(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                        e.preventDefault();
+                        handleSaveChanges();
+                      }
+                    }}
+                    onPaste={(e) => {
                       e.preventDefault();
-                      handleSaveChanges();
-                    }
-                  }}
-                  onPaste={(e) => {
-                    // Handle paste to strip formatting if needed
-                    e.preventDefault();
-                    const text = e.clipboardData.getData('text/html') || e.clipboardData.getData('text/plain');
-                    document.execCommand('insertHTML', false, text);
-                  }}
-                  dangerouslySetInnerHTML={{ __html: editedContent }}
-                  className="proposal-editor-content"
-                  style={{
-                    width: "100%",
-                    minHeight: 450,
-                    padding: 24,
-                    borderRadius: "0 0 10px 10px",
-                    background: "#1e2128",
-                    border: hasUnsavedChanges ? "1px solid rgba(245,158,11,0.3)" : "1px solid rgba(255,255,255,0.08)",
-                    borderTop: "none",
-                    color: "#e5e7eb",
-                    fontSize: 14,
-                    fontFamily: "'Inter', -apple-system, sans-serif",
-                    outline: "none",
-                    lineHeight: 1.7,
-                    overflowY: "auto",
-                    maxHeight: 500
-                  }}
-                  suppressContentEditableWarning={true}
-                />
+                      const text = e.clipboardData.getData('text/html') || e.clipboardData.getData('text/plain');
+                      document.execCommand('insertHTML', false, text);
+                    }}
+                    dangerouslySetInnerHTML={{ __html: editedContent }}
+                    className="proposal-editor-content"
+                    style={{
+                      minHeight: 400,
+                      maxHeight: 500,
+                      overflowY: "auto",
+                      padding: "32px 48px",
+                      background: "#fff",
+                      color: "#1f2937",
+                      fontSize: 14,
+                      fontFamily: "'Inter', -apple-system, sans-serif",
+                      outline: "none",
+                      lineHeight: 1.7
+                    }}
+                    suppressContentEditableWarning={true}
+                  />
+                </div>
+
+                {hasUnsavedChanges && (
+                  <div style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "8px 12px",
+                    background: "rgba(245,158,11,0.1)",
+                    borderRadius: 8,
+                    marginTop: 12,
+                    border: "1px solid rgba(245,158,11,0.2)"
+                  }}>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#f59e0b" }} />
+                    <span style={{ fontSize: 12, color: "#f59e0b" }}>Unsaved changes</span>
+                  </div>
+                )}
+
                 <style>{`
                   .proposal-editor-content h1 {
-                    font-size: 24px;
+                    font-size: 20px;
                     font-weight: 700;
-                    color: #a5b4fc;
+                    color: ${companySettings.accentColor};
                     margin: 24px 0 16px 0;
                     text-align: center;
+                    padding: 16px;
+                    background: linear-gradient(135deg, ${companySettings.accentColor}10, ${companySettings.accentColor}05);
+                    border-radius: 8px;
                   }
                   .proposal-editor-content h2 {
-                    font-size: 16px;
+                    font-size: 13px;
                     font-weight: 600;
-                    color: #a5b4fc;
-                    margin: 24px 0 12px 0;
-                    padding-bottom: 8px;
-                    border-bottom: 2px solid rgba(99,102,241,0.3);
+                    color: ${companySettings.accentColor};
+                    margin: 28px 0 12px 0;
+                    padding-bottom: 6px;
+                    border-bottom: 2px solid ${companySettings.accentColor}30;
                     text-transform: uppercase;
                     letter-spacing: 0.05em;
                   }
                   .proposal-editor-content h3 {
                     font-size: 14px;
                     font-weight: 600;
-                    color: #c4b5fd;
+                    color: #374151;
                     margin: 16px 0 8px 0;
                   }
                   .proposal-editor-content p {
                     margin: 8px 0;
-                    color: #e5e7eb;
+                    color: #374151;
                   }
                   .proposal-editor-content ul, .proposal-editor-content ol {
                     margin: 12px 0;
@@ -4601,26 +4633,26 @@ const ProposalEditor = ({ proposals, setProposals }) => {
                   }
                   .proposal-editor-content li {
                     margin: 6px 0;
-                    color: #d1d5db;
+                    color: #4b5563;
                   }
                   .proposal-editor-content strong {
-                    color: #f9fafb;
+                    color: #111827;
                     font-weight: 600;
                   }
                   .proposal-editor-content em {
-                    color: #9ca3af;
+                    color: #6b7280;
                   }
                   .proposal-editor-content hr {
                     border: none;
-                    border-top: 1px solid rgba(255,255,255,0.1);
-                    margin: 20px 0;
+                    border-top: 1px solid #e5e7eb;
+                    margin: 24px 0;
                   }
                   .proposal-editor-content a {
-                    color: #818cf8;
+                    color: ${companySettings.accentColor};
                     text-decoration: underline;
                   }
                   .proposal-editor-content blockquote {
-                    border-left: 3px solid #6366f1;
+                    border-left: 3px solid ${companySettings.accentColor};
                     padding-left: 16px;
                     margin: 16px 0;
                     color: #9ca3af;
