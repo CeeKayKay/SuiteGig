@@ -182,40 +182,77 @@ export function useSuiteGigData() {
 
   // Individual setters that sync to Supabase
   // Using dataRef.current to always get latest data
+  // All setters save to localStorage first as backup, then try Supabase
   const setTransactions = useCallback(async (val) => {
     const newVal = typeof val === 'function' ? val(dataRef.current.transactions) : val;
     setData(prev => ({ ...prev, transactions: newVal }));
-    await dataService.saveTransactions(newVal);
+    try {
+      localStorage.setItem('cs_transactions', JSON.stringify(newVal));
+    } catch (e) { console.warn('Failed to save transactions to localStorage:', e); }
+    try {
+      await dataService.saveTransactions(newVal);
+    } catch (e) { console.warn('Failed to save transactions to Supabase:', e); }
   }, []);
 
   const setInvoices = useCallback(async (val) => {
     const newVal = typeof val === 'function' ? val(dataRef.current.invoices) : val;
     setData(prev => ({ ...prev, invoices: newVal }));
-    await dataService.saveInvoices(newVal);
+    try {
+      localStorage.setItem('cs_invoices', JSON.stringify(newVal));
+    } catch (e) { console.warn('Failed to save invoices to localStorage:', e); }
+    try {
+      await dataService.saveInvoices(newVal);
+    } catch (e) { console.warn('Failed to save invoices to Supabase:', e); }
   }, []);
 
   const setInquiries = useCallback(async (val) => {
     const newVal = typeof val === 'function' ? val(dataRef.current.inquiries) : val;
     setData(prev => ({ ...prev, inquiries: newVal }));
-    await dataService.saveInquiries(newVal);
+    // Always save to localStorage first as backup
+    try {
+      localStorage.setItem('cs_inquiries', JSON.stringify(newVal));
+    } catch (e) {
+      console.warn('Failed to save inquiries to localStorage:', e);
+    }
+    // Then try to save to Supabase
+    try {
+      await dataService.saveInquiries(newVal);
+    } catch (e) {
+      console.warn('Failed to save inquiries to Supabase:', e);
+    }
   }, []);
 
   const setContracts = useCallback(async (val) => {
     const newVal = typeof val === 'function' ? val(dataRef.current.contracts) : val;
     setData(prev => ({ ...prev, contracts: newVal }));
-    await dataService.saveContracts(newVal);
+    try {
+      localStorage.setItem('cs_contracts', JSON.stringify(newVal));
+    } catch (e) { console.warn('Failed to save contracts to localStorage:', e); }
+    try {
+      await dataService.saveContracts(newVal);
+    } catch (e) { console.warn('Failed to save contracts to Supabase:', e); }
   }, []);
 
   const setEvents = useCallback(async (val) => {
     const newVal = typeof val === 'function' ? val(dataRef.current.events) : val;
     setData(prev => ({ ...prev, events: newVal }));
-    await dataService.saveEvents(newVal);
+    try {
+      localStorage.setItem('cs_events', JSON.stringify(newVal));
+    } catch (e) { console.warn('Failed to save events to localStorage:', e); }
+    try {
+      await dataService.saveEvents(newVal);
+    } catch (e) { console.warn('Failed to save events to Supabase:', e); }
   }, []);
 
   const setProposals = useCallback(async (val) => {
     const newVal = typeof val === 'function' ? val(dataRef.current.proposals) : val;
     setData(prev => ({ ...prev, proposals: newVal }));
-    await dataService.saveProposals(newVal);
+    try {
+      localStorage.setItem('cs_proposals', JSON.stringify(newVal));
+    } catch (e) { console.warn('Failed to save proposals to localStorage:', e); }
+    try {
+      await dataService.saveProposals(newVal);
+    } catch (e) { console.warn('Failed to save proposals to Supabase:', e); }
   }, []);
 
   const setExpenses = useCallback(async (val) => {
