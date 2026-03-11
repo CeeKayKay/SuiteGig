@@ -3254,6 +3254,218 @@ Example:
 };
 
 // ═══════════════════════════════════════════════════════
+// SECTION: UPCOMING GIGS
+// ═══════════════════════════════════════════════════════
+
+const UpcomingGigs = ({ events, contracts, invoices }) => {
+  const [selectedGig, setSelectedGig] = useState(null);
+  const [contractInputRef] = useState(useRef(null));
+
+  // Combine events/contracts into upcoming gigs, sorted by date
+  const upcomingGigs = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    return events
+      .filter(e => e.date >= today)
+      .map(e => {
+        const contract = contracts.find(c => c.eventName === e.name);
+        const invoice = invoices.find(i => i.client === e.client && i.items?.some(item => item.desc?.includes(e.name)));
+        return { ...e, contract, invoice };
+      })
+      .sort((a, b) => a.date.localeCompare(b.date));
+  }, [events, contracts, invoices]);
+
+  // Calculate days until event
+  const daysUntil = (date) => {
+    const eventDate = new Date(date + 'T00:00:00');
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const diff = Math.ceil((eventDate - today) / (1000 * 60 * 60 * 24));
+    if (diff === 0) return "Today";
+    if (diff === 1) return "Tomorrow";
+    if (diff < 7) return `${diff} days`;
+    if (diff < 30) return `${Math.ceil(diff / 7)} weeks`;
+    return `${Math.ceil(diff / 30)} months`;
+  };
+
+  // Get status color
+  const getStatusColor = (gig) => {
+    const days = Math.ceil((new Date(gig.date + 'T00:00:00') - new Date()) / (1000 * 60 * 60 * 24));
+    if (days <= 7) return "#ef4444"; // Red - urgent
+    if (days <= 30) return "#f59e0b"; // Orange - soon
+    return "#10b981"; // Green - plenty of time
+  };
+
+  return (
+    <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+        <div>
+          <h1 style={{ fontSize: 28, fontWeight: 700, color: "#f0f0f0", marginBottom: 4 }}>Upcoming Gigs</h1>
+          <p style={{ color: "#888", fontSize: 14 }}>Your confirmed events at a glance</p>
+        </div>
+        <div style={{ display: "flex", gap: 16 }}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 28, fontWeight: 700, color: "#6366f1" }}>{upcomingGigs.length}</div>
+            <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase" }}>Upcoming</div>
+          </div>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: 28, fontWeight: 700, color: "#10b981" }}>{formatCurrency(upcomingGigs.reduce((s, g) => s + (g.value || 0), 0))}</div>
+            <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase" }}>Total Value</div>
+          </div>
+        </div>
+      </div>
+
+      {upcomingGigs.length === 0 ? (
+        <div style={{ textAlign: "center", padding: 60, color: "#666" }}>
+          <Icon name="calendar" size={48} />
+          <p style={{ marginTop: 16, fontSize: 16 }}>No upcoming gigs</p>
+          <p style={{ fontSize: 13 }}>Confirmed inquiries will appear here</p>
+        </div>
+      ) : (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 20 }}>
+          {upcomingGigs.map(gig => (
+            <div key={gig.id} onClick={() => setSelectedGig(gig)}
+              style={{
+                background: "#1a1d23", borderRadius: 16, overflow: "hidden",
+                border: "1px solid rgba(255,255,255,0.06)", cursor: "pointer",
+                transition: "all 0.2s", position: "relative"
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = getStatusColor(gig) + "66"; e.currentTarget.style.transform = "translateY(-2px)"; }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.06)"; e.currentTarget.style.transform = "translateY(0)"; }}>
+              {/* Top accent bar */}
+              <div style={{ height: 4, background: getStatusColor(gig) }} />
+
+              <div style={{ padding: 20 }}>
+                {/* Header */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                  <div>
+                    <h3 style={{ fontSize: 18, fontWeight: 700, color: "#f0f0f0", marginBottom: 4 }}>{gig.name}</h3>
+                    <div style={{ fontSize: 13, color: "#888" }}>{gig.client}</div>
+                  </div>
+                  <Badge color={getStatusColor(gig)}>{daysUntil(gig.date)}</Badge>
+                </div>
+
+                {/* Details */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+                  <div>
+                    <div style={{ fontSize: 11, color: "#666", textTransform: "uppercase", marginBottom: 2 }}>Date</div>
+                    <div style={{ fontSize: 14, color: "#f0f0f0", fontWeight: 500 }}>{formatDate(gig.date)}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: "#666", textTransform: "uppercase", marginBottom: 2 }}>Time</div>
+                    <div style={{ fontSize: 14, color: "#f0f0f0", fontWeight: 500 }}>{gig.time || "TBD"}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: "#666", textTransform: "uppercase", marginBottom: 2 }}>Venue</div>
+                    <div style={{ fontSize: 14, color: "#f0f0f0", fontWeight: 500 }}>{gig.venue || "TBD"}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 11, color: "#666", textTransform: "uppercase", marginBottom: 2 }}>Value</div>
+                    <div style={{ fontSize: 14, color: "#10b981", fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(gig.value)}</div>
+                  </div>
+                </div>
+
+                {/* Status indicators */}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {gig.contract && <Badge color="#6366f1">Contract ✓</Badge>}
+                  {gig.invoice && <Badge color={gig.invoice.status === "paid" ? "#10b981" : "#f59e0b"}>
+                    Invoice {gig.invoice.status === "paid" ? "Paid" : "Pending"}
+                  </Badge>}
+                  {gig.guests > 0 && <Badge color="#888">{gig.guests} guests</Badge>}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Gig Detail Modal */}
+      <Modal isOpen={selectedGig !== null} onClose={() => setSelectedGig(null)} title={selectedGig?.name || ""} width="600px">
+        {selectedGig && (
+          <div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
+              <div>
+                <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Client</div>
+                <div style={{ fontSize: 16, color: "#f0f0f0" }}>{selectedGig.client}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Email</div>
+                <div style={{ fontSize: 16, color: "#6366f1" }}>{selectedGig.email}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Date & Time</div>
+                <div style={{ fontSize: 16, color: "#f0f0f0" }}>{formatDate(selectedGig.date)} at {selectedGig.time || "TBD"}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Venue</div>
+                <div style={{ fontSize: 16, color: "#f0f0f0" }}>{selectedGig.venue || "TBD"}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Guests</div>
+                <div style={{ fontSize: 16, color: "#f0f0f0" }}>{selectedGig.guests || "TBD"}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Value</div>
+                <div style={{ fontSize: 20, color: "#10b981", fontWeight: 700, fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(selectedGig.value)}</div>
+              </div>
+            </div>
+
+            {/* Contract & Invoice Status */}
+            <div style={{ display: "flex", gap: 12, marginBottom: 20 }}>
+              <div style={{ flex: 1, padding: 16, background: "rgba(99,102,241,0.06)", borderRadius: 10, border: "1px solid rgba(99,102,241,0.15)" }}>
+                <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Contract</div>
+                {selectedGig.contract ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <Icon name="check" size={16} />
+                    <span style={{ color: "#10b981" }}>On file</span>
+                  </div>
+                ) : (
+                  <div style={{ color: "#f59e0b" }}>Not uploaded</div>
+                )}
+              </div>
+              <div style={{ flex: 1, padding: 16, background: "rgba(16,185,129,0.06)", borderRadius: 10, border: "1px solid rgba(16,185,129,0.15)" }}>
+                <div style={{ fontSize: 12, color: "#888", marginBottom: 4 }}>Invoice</div>
+                {selectedGig.invoice ? (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <Badge color={selectedGig.invoice.status === "paid" ? "#10b981" : "#f59e0b"}>
+                      {selectedGig.invoice.status === "paid" ? "Paid" : selectedGig.invoice.status === "sent" ? "Sent" : "Draft"}
+                    </Badge>
+                    <span style={{ fontSize: 12, color: "#888" }}>{selectedGig.invoice.number}</span>
+                  </div>
+                ) : (
+                  <div style={{ color: "#888" }}>No invoice</div>
+                )}
+              </div>
+            </div>
+
+            {/* Tasks preview */}
+            {selectedGig.tasks && selectedGig.tasks.length > 0 && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 12, color: "#888", marginBottom: 8, textTransform: "uppercase" }}>Tasks</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {selectedGig.tasks.slice(0, 3).map(task => (
+                    <div key={task.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: task.done ? "#666" : "#ccc" }}>
+                      <Icon name={task.done ? "check" : "events"} size={14} />
+                      <span style={{ textDecoration: task.done ? "line-through" : "none" }}>{task.text}</span>
+                    </div>
+                  ))}
+                  {selectedGig.tasks.length > 3 && (
+                    <div style={{ fontSize: 12, color: "#6366f1" }}>+{selectedGig.tasks.length - 3} more tasks</div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <Btn variant="secondary" onClick={() => setSelectedGig(null)}>Close</Btn>
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════
 // SECTION: INQUIRY MANAGEMENT
 // ═══════════════════════════════════════════════════════
 
@@ -3261,6 +3473,7 @@ const InquiryManagement = ({ inquiries, setInquiries, onConvertToContract }) => 
   const [showNew, setShowNew] = useState(false);
   const [newInq, setNewInq] = useState({ name: "", contact: "", email: "", phone: "", phase: "new", grade: "B", date: "", value: 0, notes: "", nextSteps: "" });
   const [selectedInq, setSelectedInq] = useState(null);
+  const [showArchive, setShowArchive] = useState(false);
 
   const addInquiry = () => {
     setInquiries(prev => [...prev, { ...newInq, id: generateId() }]);
@@ -3272,6 +3485,11 @@ const InquiryManagement = ({ inquiries, setInquiries, onConvertToContract }) => 
     setInquiries(prev => prev.map(inq => inq.id === id ? { ...inq, phase } : inq));
   };
 
+  // Separate active and released inquiries
+  const activeInquiries = inquiries.filter(i => i.phase !== "released");
+  const releasedInquiries = inquiries.filter(i => i.phase === "released");
+  const activePhases = INQUIRY_PHASES.filter(p => p.id !== "released");
+
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
@@ -3279,13 +3497,20 @@ const InquiryManagement = ({ inquiries, setInquiries, onConvertToContract }) => 
           <h1 style={{ fontSize: 28, fontWeight: 700, color: "#f0f0f0", marginBottom: 4 }}>Inquiry Management</h1>
           <p style={{ color: "#888", fontSize: 14 }}>Track leads through your pipeline</p>
         </div>
-        <Btn icon="plus" onClick={() => setShowNew(true)}>New Inquiry</Btn>
+        <div style={{ display: "flex", gap: 8 }}>
+          {releasedInquiries.length > 0 && (
+            <Btn variant={showArchive ? "secondary" : "ghost"} onClick={() => setShowArchive(!showArchive)}>
+              {showArchive ? "Hide" : "Show"} Archive ({releasedInquiries.length})
+            </Btn>
+          )}
+          <Btn icon="plus" onClick={() => setShowNew(true)}>New Inquiry</Btn>
+        </div>
       </div>
 
       {/* Pipeline view */}
       <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 16, marginBottom: 20 }}>
-        {INQUIRY_PHASES.map(phase => {
-          const items = inquiries.filter(i => i.phase === phase.id);
+        {activePhases.map(phase => {
+          const items = activeInquiries.filter(i => i.phase === phase.id);
           return (
             <div key={phase.id} style={{ minWidth: 260, flex: 1, background: "#1a1d23", borderRadius: 14, border: "1px solid rgba(255,255,255,0.05)", overflow: "hidden" }}>
               <div style={{ padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -3317,6 +3542,31 @@ const InquiryManagement = ({ inquiries, setInquiries, onConvertToContract }) => 
           );
         })}
       </div>
+
+      {/* Archive Section */}
+      {showArchive && releasedInquiries.length > 0 && (
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
+            <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#ef4444" }} />
+            <h3 style={{ fontSize: 16, fontWeight: 600, color: "#888" }}>Released / Archive ({releasedInquiries.length})</h3>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
+            {releasedInquiries.map(inq => (
+              <div key={inq.id} onClick={() => setSelectedInq(inq)}
+                style={{ padding: 16, borderRadius: 12, background: "rgba(239,68,68,0.04)", border: "1px solid rgba(239,68,68,0.1)", cursor: "pointer", opacity: 0.8 }}
+                onMouseEnter={e => e.currentTarget.style.opacity = "1"}
+                onMouseLeave={e => e.currentTarget.style.opacity = "0.8"}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: "#888" }}>{inq.name}</span>
+                  <Badge color="#ef4444">Released</Badge>
+                </div>
+                <div style={{ fontSize: 12, color: "#666" }}>{inq.contact}</div>
+                <div style={{ fontSize: 12, color: "#666" }}>{formatDate(inq.date)} · {formatCurrency(inq.value)}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* New Inquiry Modal */}
       <Modal isOpen={showNew} onClose={() => setShowNew(false)} title="New Inquiry" width="550px">
@@ -3408,7 +3658,46 @@ const InquiryManagement = ({ inquiries, setInquiries, onConvertToContract }) => 
 const Contracting = ({ contracts, setContracts, invoices, setInvoices }) => {
   const [showNewContract, setShowNewContract] = useState(false);
   const [showInvoiceOnly, setShowInvoiceOnly] = useState(false);
+  const [showImportContract, setShowImportContract] = useState(false);
   const [newContract, setNewContract] = useState({ client: "", email: "", eventName: "", eventDate: "", value: 0, terms: "" });
+  const [importFile, setImportFile] = useState(null);
+  const [importFilePreview, setImportFilePreview] = useState(null);
+  const [assignToContract, setAssignToContract] = useState("");
+  const contractFileRef = useRef(null);
+
+  const handleContractFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) {
+      alert("File too large (max 10MB)");
+      return;
+    }
+    setImportFile(file);
+    // Create preview for images/PDFs
+    if (file.type.startsWith('image/')) {
+      const reader = new FileReader();
+      reader.onload = (evt) => setImportFilePreview(evt.target.result);
+      reader.readAsDataURL(file);
+    } else {
+      setImportFilePreview(null);
+    }
+  };
+
+  const handleImportContract = () => {
+    if (!importFile || !assignToContract) return;
+    // Update the contract with the file reference
+    setContracts(prev => prev.map(c => c.id === assignToContract ? {
+      ...c,
+      contractFile: importFile.name,
+      contractFileData: importFilePreview, // Store base64 for images
+      hasContractFile: true
+    } : c));
+    setShowImportContract(false);
+    setImportFile(null);
+    setImportFilePreview(null);
+    setAssignToContract("");
+    alert("Contract file attached successfully!");
+  };
 
   const createContract = () => {
     const contract = { id: generateId(), ...newContract, status: "active", createdDate: new Date().toISOString().split("T")[0] };
@@ -3439,12 +3728,14 @@ const Contracting = ({ contracts, setContracts, invoices, setInvoices }) => {
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <Btn icon="plus" onClick={() => setShowNewContract(true)}>New Contract + Invoice</Btn>
+          <Btn variant="secondary" icon="download" onClick={() => setShowImportContract(true)}>Import Contract</Btn>
           <Btn variant="secondary" icon="invoice" onClick={() => setShowInvoiceOnly(true)}>Invoice Only</Btn>
         </div>
       </div>
 
       <div style={{ display: "flex", gap: 16, marginBottom: 24 }}>
         <StatCard label="Active Contracts" value={contracts.filter(c => c.status === "active").length} accent="#6366f1" icon="contract" />
+        <StatCard label="With Files" value={contracts.filter(c => c.hasContractFile).length} accent="#8b5cf6" icon="contract" />
         <StatCard label="Total Contract Value" value={formatCurrency(contracts.reduce((s, c) => s + c.value, 0))} accent="#10b981" icon="dollar" />
       </div>
 
@@ -3460,6 +3751,10 @@ const Contracting = ({ contracts, setContracts, invoices, setInvoices }) => {
             { key: "client", label: "Client" },
             { key: "eventDate", label: "Date", render: r => formatDate(r.eventDate) },
             { key: "value", label: "Value", align: "right", render: r => <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{formatCurrency(r.value)}</span> },
+            { key: "file", label: "File", align: "center", render: r => r.hasContractFile
+              ? <span style={{ color: "#10b981" }} title={r.contractFile}><Icon name="check" size={16} /></span>
+              : <span style={{ color: "#666" }}>—</span>
+            },
             { key: "status", label: "Status", render: r => <Badge color={r.status === "active" ? "#10b981" : "#888"}>{r.status}</Badge> },
             { key: "createdDate", label: "Created", render: r => formatDate(r.createdDate) },
           ]}
@@ -3490,6 +3785,60 @@ const Contracting = ({ contracts, setContracts, invoices, setInvoices }) => {
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
           <Btn variant="secondary" onClick={() => setShowInvoiceOnly(false)}>Cancel</Btn>
           <Btn>Create Invoice</Btn>
+        </div>
+      </Modal>
+
+      {/* Import Contract Modal */}
+      <Modal isOpen={showImportContract} onClose={() => { setShowImportContract(false); setImportFile(null); setImportFilePreview(null); setAssignToContract(""); }} title="Import Contract File" width="550px">
+        <p style={{ color: "#888", fontSize: 13, marginBottom: 16 }}>Upload a signed contract (PDF or image) and assign it to a gig.</p>
+
+        {/* File Upload */}
+        <div style={{ marginBottom: 20 }}>
+          <input ref={contractFileRef} type="file" accept=".pdf,image/*" onChange={handleContractFileUpload} style={{ display: "none" }} />
+          {!importFile ? (
+            <div onClick={() => contractFileRef.current?.click()}
+              style={{ border: "2px dashed rgba(255,255,255,0.1)", borderRadius: 12, padding: 40, textAlign: "center", cursor: "pointer", transition: "all 0.2s" }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = "rgba(99,102,241,0.4)"}
+              onMouseLeave={e => e.currentTarget.style.borderColor = "rgba(255,255,255,0.1)"}>
+              <Icon name="download" size={32} />
+              <p style={{ color: "#888", marginTop: 12, marginBottom: 4 }}>Click to upload contract file</p>
+              <p style={{ color: "#666", fontSize: 12 }}>PDF, JPG, PNG (max 10MB)</p>
+            </div>
+          ) : (
+            <div style={{ background: "rgba(99,102,241,0.06)", borderRadius: 12, padding: 16, border: "1px solid rgba(99,102,241,0.15)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <Icon name="contract" size={24} />
+                  <div>
+                    <div style={{ fontSize: 14, color: "#f0f0f0", fontWeight: 500 }}>{importFile.name}</div>
+                    <div style={{ fontSize: 12, color: "#888" }}>{(importFile.size / 1024).toFixed(1)} KB</div>
+                  </div>
+                </div>
+                <Btn variant="ghost" icon="x" onClick={() => { setImportFile(null); setImportFilePreview(null); }} />
+              </div>
+              {importFilePreview && (
+                <img src={importFilePreview} alt="Contract preview" style={{ marginTop: 12, maxWidth: "100%", maxHeight: 200, borderRadius: 8 }} />
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Assign to Contract */}
+        <Select label="Assign to Gig / Contract" value={assignToContract} onChange={setAssignToContract}
+          options={[
+            { value: "", label: "Select a gig..." },
+            ...contracts.filter(c => !c.hasContractFile).map(c => ({ value: c.id, label: `${c.eventName} — ${c.client}` }))
+          ]} />
+
+        {contracts.filter(c => !c.hasContractFile).length === 0 && (
+          <p style={{ color: "#f59e0b", fontSize: 12, marginTop: -8, marginBottom: 16 }}>
+            All existing contracts already have files attached. Create a new contract first.
+          </p>
+        )}
+
+        <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 16 }}>
+          <Btn variant="secondary" onClick={() => { setShowImportContract(false); setImportFile(null); setImportFilePreview(null); setAssignToContract(""); }}>Cancel</Btn>
+          <Btn onClick={handleImportContract} disabled={!importFile || !assignToContract}>Attach Contract</Btn>
         </div>
       </Modal>
     </div>
@@ -3866,6 +4215,7 @@ const Payments = ({ invoices, transactions }) => {
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: "dashboard" },
   { id: "aiagent", label: "AI Agent", icon: "ai" },
+  { id: "upcoming", label: "Upcoming Gigs", icon: "star" },
   { id: "tax", label: "S Corp Tax", icon: "tax" },
   { id: "banking", label: "Banking", icon: "bank" },
   { id: "expenses", label: "Expenses", icon: "receipt" },
@@ -3960,6 +4310,7 @@ export default function App() {
     switch (activeView) {
       case "dashboard": return <Dashboard transactions={transactions} invoices={invoices} inquiries={inquiries} events={events} />;
       case "aiagent": return <AIAgent inquiries={inquiries} setInquiries={setInquiries} />;
+      case "upcoming": return <UpcomingGigs events={events} contracts={contracts} invoices={invoices} />;
       case "tax": return <TaxManagement transactions={transactions} />;
       case "banking": return <Banking transactions={transactions} setTransactions={setTransactions} bankAccounts={bankAccounts} setBankAccounts={setBankAccounts} expenseCategories={expenseCategories} />;
       case "expenses": return <Expenses expenses={expenses} setExpenses={setExpenses} creditCards={creditCards} setCreditCards={setCreditCards} budgets={budgets} setBudgets={setBudgets} categoryRules={categoryRules} setCategoryRules={setCategoryRules} expenseCategories={expenseCategories} customCategories={customCategories} setCustomCategories={setCustomCategories} />;
