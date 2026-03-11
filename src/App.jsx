@@ -3787,6 +3787,7 @@ const ProposalEditor = ({ proposals, setProposals }) => {
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null); // null, "saved", "error"
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
+  const editorRef = useRef(null);
 
   // Proposal template settings
   const [companySettings, setCompanySettings] = useState(() => {
@@ -4073,11 +4074,14 @@ const ProposalEditor = ({ proposals, setProposals }) => {
 <body>
   <div class="proposal-container">
     <div class="header">
-      <div class="company-info">
-        <h1>${companySettings.companyName}</h1>
-        <p>${companySettings.contactName}</p>
-        <p>${companySettings.email} | ${companySettings.phone}</p>
-        ${companySettings.website ? `<p>${companySettings.website}</p>` : ''}
+      <div class="company-info" style="display: flex; align-items: center; gap: 16px;">
+        ${companySettings.logo ? `<img src="${companySettings.logo}" alt="Logo" style="width: 70px; height: 70px; object-fit: contain;" />` : ''}
+        <div>
+          <h1>${companySettings.companyName}</h1>
+          <p>${companySettings.contactName}</p>
+          <p>${companySettings.email} | ${companySettings.phone}</p>
+          ${companySettings.website ? `<p>${companySettings.website}</p>` : ''}
+        </div>
       </div>
       <div class="proposal-meta">
         <strong>PROPOSAL</strong>
@@ -4157,6 +4161,74 @@ const ProposalEditor = ({ proposals, setProposals }) => {
         <div style={{ background: "#1a1d23", borderRadius: 14, padding: 24, marginBottom: 24, border: "1px solid rgba(255,255,255,0.05)" }}>
           <h3 style={{ fontSize: 16, fontWeight: 600, color: "#f0f0f0", marginBottom: 16 }}>Company Settings</h3>
           <p style={{ color: "#888", fontSize: 12, marginBottom: 16 }}>These details will appear on your exported proposals</p>
+
+          {/* Logo Upload Section */}
+          <div style={{ marginBottom: 24, padding: 16, background: "rgba(255,255,255,0.02)", borderRadius: 10, border: "1px solid rgba(255,255,255,0.05)" }}>
+            <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 12 }}>Company Logo</label>
+            <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+              {companySettings.logo ? (
+                <div style={{ position: "relative" }}>
+                  <img
+                    src={companySettings.logo}
+                    alt="Company Logo"
+                    style={{ width: 80, height: 80, objectFit: "contain", borderRadius: 8, background: "#fff", padding: 8 }}
+                  />
+                  <button
+                    onClick={() => setCompanySettings(prev => ({ ...prev, logo: null }))}
+                    style={{
+                      position: "absolute", top: -8, right: -8, width: 24, height: 24,
+                      borderRadius: "50%", border: "none", background: "#ef4444", color: "#fff",
+                      cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: 14, fontWeight: "bold"
+                    }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ) : (
+                <div style={{
+                  width: 80, height: 80, borderRadius: 8, border: "2px dashed rgba(255,255,255,0.2)",
+                  display: "flex", alignItems: "center", justifyContent: "center", color: "#666"
+                }}>
+                  <Icon name="image" size={32} />
+                </div>
+              )}
+              <div>
+                <input
+                  type="file"
+                  id="logo-upload"
+                  accept="image/*"
+                  style={{ display: "none" }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      if (file.size > 2 * 1024 * 1024) {
+                        alert("Logo must be less than 2MB");
+                        return;
+                      }
+                      const reader = new FileReader();
+                      reader.onload = (event) => {
+                        setCompanySettings(prev => ({ ...prev, logo: event.target.result }));
+                      };
+                      reader.readAsDataURL(file);
+                    }
+                  }}
+                />
+                <label
+                  htmlFor="logo-upload"
+                  style={{
+                    display: "inline-block", padding: "8px 16px", background: "rgba(99,102,241,0.1)",
+                    border: "1px solid rgba(99,102,241,0.3)", borderRadius: 8, color: "#a5b4fc",
+                    fontSize: 13, cursor: "pointer", fontWeight: 500
+                  }}
+                >
+                  {companySettings.logo ? "Change Logo" : "Upload Logo"}
+                </label>
+                <p style={{ fontSize: 11, color: "#666", marginTop: 8 }}>PNG, JPG up to 2MB. Will appear on PDF exports.</p>
+              </div>
+            </div>
+          </div>
+
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <Input label="Company Name" value={companySettings.companyName} onChange={(v) => setCompanySettings(prev => ({ ...prev, companyName: v }))} />
             <Input label="Contact Name" value={companySettings.contactName} onChange={(v) => setCompanySettings(prev => ({ ...prev, contactName: v }))} />
@@ -4317,89 +4389,186 @@ const ProposalEditor = ({ proposals, setProposals }) => {
                   </div>
                 )}
 
-                <textarea
-                  value={editedContent}
-                  onChange={(e) => handleContentChange(e.target.value)}
+                {/* Rich Text Formatting Toolbar */}
+                <div style={{
+                  display: "flex",
+                  gap: 4,
+                  padding: "8px 12px",
+                  background: "rgba(255,255,255,0.03)",
+                  borderRadius: "10px 10px 0 0",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  borderBottom: "none",
+                  flexWrap: "wrap"
+                }}>
+                  {/* Text Formatting */}
+                  <div style={{ display: "flex", gap: 2, paddingRight: 8, borderRight: "1px solid rgba(255,255,255,0.1)" }}>
+                    <button
+                      onClick={() => document.execCommand('bold')}
+                      style={{ padding: "6px 10px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 4, color: "#ccc", fontSize: 13, cursor: "pointer", fontWeight: "bold" }}
+                      title="Bold (Ctrl+B)"
+                    >
+                      B
+                    </button>
+                    <button
+                      onClick={() => document.execCommand('italic')}
+                      style={{ padding: "6px 10px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 4, color: "#ccc", fontSize: 13, cursor: "pointer", fontStyle: "italic" }}
+                      title="Italic (Ctrl+I)"
+                    >
+                      I
+                    </button>
+                    <button
+                      onClick={() => document.execCommand('underline')}
+                      style={{ padding: "6px 10px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 4, color: "#ccc", fontSize: 13, cursor: "pointer", textDecoration: "underline" }}
+                      title="Underline (Ctrl+U)"
+                    >
+                      U
+                    </button>
+                  </div>
+
+                  {/* Headings */}
+                  <div style={{ display: "flex", gap: 2, paddingRight: 8, borderRight: "1px solid rgba(255,255,255,0.1)" }}>
+                    <button
+                      onClick={() => document.execCommand('formatBlock', false, 'h2')}
+                      style={{ padding: "6px 10px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 4, color: "#ccc", fontSize: 12, cursor: "pointer" }}
+                      title="Heading"
+                    >
+                      H1
+                    </button>
+                    <button
+                      onClick={() => document.execCommand('formatBlock', false, 'h3')}
+                      style={{ padding: "6px 10px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 4, color: "#ccc", fontSize: 11, cursor: "pointer" }}
+                      title="Subheading"
+                    >
+                      H2
+                    </button>
+                    <button
+                      onClick={() => document.execCommand('formatBlock', false, 'p')}
+                      style={{ padding: "6px 10px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 4, color: "#ccc", fontSize: 11, cursor: "pointer" }}
+                      title="Normal text"
+                    >
+                      ¶
+                    </button>
+                  </div>
+
+                  {/* Lists */}
+                  <div style={{ display: "flex", gap: 2, paddingRight: 8, borderRight: "1px solid rgba(255,255,255,0.1)" }}>
+                    <button
+                      onClick={() => document.execCommand('insertUnorderedList')}
+                      style={{ padding: "6px 10px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 4, color: "#ccc", fontSize: 12, cursor: "pointer" }}
+                      title="Bullet List"
+                    >
+                      • List
+                    </button>
+                    <button
+                      onClick={() => document.execCommand('insertOrderedList')}
+                      style={{ padding: "6px 10px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 4, color: "#ccc", fontSize: 12, cursor: "pointer" }}
+                      title="Numbered List"
+                    >
+                      1. List
+                    </button>
+                  </div>
+
+                  {/* Alignment */}
+                  <div style={{ display: "flex", gap: 2, paddingRight: 8, borderRight: "1px solid rgba(255,255,255,0.1)" }}>
+                    <button
+                      onClick={() => document.execCommand('justifyLeft')}
+                      style={{ padding: "6px 8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 4, color: "#ccc", fontSize: 11, cursor: "pointer" }}
+                      title="Align Left"
+                    >
+                      ≡
+                    </button>
+                    <button
+                      onClick={() => document.execCommand('justifyCenter')}
+                      style={{ padding: "6px 8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 4, color: "#ccc", fontSize: 11, cursor: "pointer" }}
+                      title="Align Center"
+                    >
+                      ≡
+                    </button>
+                    <button
+                      onClick={() => document.execCommand('justifyRight')}
+                      style={{ padding: "6px 8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 4, color: "#ccc", fontSize: 11, cursor: "pointer" }}
+                      title="Align Right"
+                    >
+                      ≡
+                    </button>
+                  </div>
+
+                  {/* Special */}
+                  <div style={{ display: "flex", gap: 2 }}>
+                    <button
+                      onClick={() => document.execCommand('insertHorizontalRule')}
+                      style={{ padding: "6px 10px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 4, color: "#ccc", fontSize: 11, cursor: "pointer" }}
+                      title="Horizontal Line"
+                    >
+                      ─
+                    </button>
+                    <button
+                      onClick={() => {
+                        const color = prompt('Enter color (e.g., #6366f1 or red):');
+                        if (color) document.execCommand('foreColor', false, color);
+                      }}
+                      style={{ padding: "6px 10px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 4, color: "#ccc", fontSize: 11, cursor: "pointer" }}
+                      title="Text Color"
+                    >
+                      A
+                    </button>
+                    <button
+                      onClick={() => document.execCommand('removeFormat')}
+                      style={{ padding: "6px 10px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 4, color: "#888", fontSize: 11, cursor: "pointer" }}
+                      title="Clear Formatting"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
+
+                {/* Rich Text Editor */}
+                <div
+                  ref={editorRef}
+                  contentEditable
+                  onInput={(e) => {
+                    const content = e.currentTarget.innerHTML;
+                    setEditedContent(content);
+                    setHasUnsavedChanges(content !== selectedProposal?.content);
+                    setSaveStatus(null);
+                  }}
                   onKeyDown={(e) => {
-                    // Handle Tab key for indentation
-                    if (e.key === 'Tab') {
-                      e.preventDefault();
-                      const start = e.target.selectionStart;
-                      const end = e.target.selectionEnd;
-                      const newContent = editedContent.substring(0, start) + '  ' + editedContent.substring(end);
-                      handleContentChange(newContent);
-                      // Set cursor position after the tab
-                      setTimeout(() => {
-                        e.target.selectionStart = e.target.selectionEnd = start + 2;
-                      }, 0);
-                    }
                     // Ctrl/Cmd + S to save
                     if ((e.ctrlKey || e.metaKey) && e.key === 's') {
                       e.preventDefault();
                       handleSaveChanges();
                     }
                   }}
-                  placeholder="Edit your proposal content here...
-
-You can use:
-  • Bullet points with • or -
-  ✓ Checkmarks with ✓
-  - Section headers in ALL CAPS
-  - Indentation with Tab key
-
-Press Ctrl+S (Cmd+S on Mac) to save quickly."
+                  onPaste={(e) => {
+                    // Handle paste to strip formatting if needed
+                    e.preventDefault();
+                    const text = e.clipboardData.getData('text/html') || e.clipboardData.getData('text/plain');
+                    document.execCommand('insertHTML', false, text);
+                  }}
+                  dangerouslySetInnerHTML={{ __html: editedContent }}
                   style={{
                     width: "100%",
-                    minHeight: 500,
-                    padding: 16,
-                    borderRadius: 10,
+                    minHeight: 450,
+                    padding: 20,
+                    borderRadius: "0 0 10px 10px",
                     background: "rgba(255,255,255,0.03)",
                     border: hasUnsavedChanges ? "1px solid rgba(245,158,11,0.3)" : "1px solid rgba(255,255,255,0.08)",
+                    borderTop: "none",
                     color: "#f0f0f0",
-                    fontSize: 13,
-                    fontFamily: "'JetBrains Mono', monospace",
-                    resize: "vertical",
+                    fontSize: 14,
+                    fontFamily: "'Inter', -apple-system, sans-serif",
                     outline: "none",
-                    lineHeight: 1.6,
-                    tabSize: 2
+                    lineHeight: 1.7,
+                    overflowY: "auto",
+                    maxHeight: 500
                   }}
+                  suppressContentEditableWarning={true}
                 />
 
-                {/* Editing toolbar */}
-                <div style={{ display: "flex", gap: 4, marginTop: 8, marginBottom: 8 }}>
-                  <button
-                    onClick={() => {
-                      const textarea = document.querySelector('textarea[value]');
-                      const start = textarea?.selectionStart || editedContent.length;
-                      const newContent = editedContent.substring(0, start) + '  • ' + editedContent.substring(start);
-                      handleContentChange(newContent);
-                    }}
-                    style={{ padding: "4px 8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 4, color: "#888", fontSize: 11, cursor: "pointer" }}
-                    title="Insert bullet point"
-                  >
-                    • Bullet
-                  </button>
-                  <button
-                    onClick={() => {
-                      const start = editedContent.length;
-                      const newContent = editedContent + '\n  ✓ ';
-                      handleContentChange(newContent);
-                    }}
-                    style={{ padding: "4px 8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 4, color: "#888", fontSize: 11, cursor: "pointer" }}
-                    title="Insert checkmark"
-                  >
-                    ✓ Check
-                  </button>
-                  <button
-                    onClick={() => {
-                      const newContent = editedContent + '\n\n───────────────────────────────────────────────────────────────\n                     NEW SECTION\n───────────────────────────────────────────────────────────────\n\n';
-                      handleContentChange(newContent);
-                    }}
-                    style={{ padding: "4px 8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 4, color: "#888", fontSize: 11, cursor: "pointer" }}
-                    title="Insert section header"
-                  >
-                    ═ Section
-                  </button>
+                {/* Editor Info */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8, fontSize: 11, color: "#666" }}>
+                  <span>Rich text editor • Ctrl+B Bold • Ctrl+I Italic • Ctrl+S Save</span>
+                  <span>{editedContent.replace(/<[^>]*>/g, '').length} characters</span>
                 </div>
 
                 <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
@@ -4448,10 +4617,15 @@ Press Ctrl+S (Cmd+S on Mac) to save quickly."
                 }}>
                   {/* Header */}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", paddingBottom: 20, borderBottom: `3px solid ${companySettings.accentColor}`, marginBottom: 24 }}>
-                    <div>
-                      <h1 style={{ fontSize: 24, fontWeight: 700, color: companySettings.accentColor, marginBottom: 4 }}>{companySettings.companyName}</h1>
-                      <p style={{ fontSize: 12, color: "#6b7280" }}>{companySettings.contactName}</p>
-                      <p style={{ fontSize: 12, color: "#6b7280" }}>{companySettings.email} | {companySettings.phone}</p>
+                    <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                      {companySettings.logo && (
+                        <img src={companySettings.logo} alt="Logo" style={{ width: 60, height: 60, objectFit: "contain" }} />
+                      )}
+                      <div>
+                        <h1 style={{ fontSize: 24, fontWeight: 700, color: companySettings.accentColor, marginBottom: 4 }}>{companySettings.companyName}</h1>
+                        <p style={{ fontSize: 12, color: "#6b7280" }}>{companySettings.contactName}</p>
+                        <p style={{ fontSize: 12, color: "#6b7280" }}>{companySettings.email} | {companySettings.phone}</p>
+                      </div>
                     </div>
                     <div style={{ textAlign: "right" }}>
                       <strong style={{ fontSize: 14 }}>PROPOSAL</strong>
