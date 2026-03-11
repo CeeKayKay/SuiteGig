@@ -4909,65 +4909,55 @@ const ProposalEditor = ({ proposals, setProposals }) => {
                   padding: 20,
                   border: "1px solid rgba(245,158,11,0.2)"
                 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16 }}>
-                    <Icon name="document" size={20} color="#f59e0b" />
-                    <h3 style={{ fontSize: 16, fontWeight: 600, color: "#f59e0b", margin: 0 }}>Original Input / Source Notes</h3>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <Icon name="document" size={20} color="#f59e0b" />
+                      <h3 style={{ fontSize: 16, fontWeight: 600, color: "#f59e0b", margin: 0 }}>Source Notes</h3>
+                    </div>
+                    <span style={{ fontSize: 11, color: "#888" }}>Original input used to generate this proposal</span>
                   </div>
-                  <p style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>
-                    This is the original text that was used to generate this proposal. It's preserved here for reference.
-                  </p>
-                  {selectedProposal.sourceNotes ? (
-                    <div style={{
-                      background: "rgba(0,0,0,0.2)",
-                      borderRadius: 8,
+                  <textarea
+                    value={selectedProposal.sourceNotes || ''}
+                    onChange={(e) => {
+                      const updated = { ...selectedProposal, sourceNotes: e.target.value };
+                      setSelectedProposal(updated);
+                      setProposals(prev => prev.map(p => p.id === selectedProposal.id ? updated : p));
+                    }}
+                    placeholder="Add notes about this proposal's source, requirements, or any other reference information..."
+                    style={{
+                      width: "100%",
+                      minHeight: 350,
+                      maxHeight: 450,
                       padding: 16,
-                      maxHeight: 400,
-                      overflowY: "auto"
-                    }}>
-                      <pre style={{
-                        whiteSpace: "pre-wrap",
-                        wordBreak: "break-word",
-                        fontSize: 13,
-                        lineHeight: 1.6,
-                        color: "#d1d5db",
-                        fontFamily: "'JetBrains Mono', monospace",
-                        margin: 0
-                      }}>
-                        {selectedProposal.sourceNotes}
-                      </pre>
-                    </div>
-                  ) : (
-                    <div style={{
                       background: "rgba(0,0,0,0.2)",
+                      border: "1px solid rgba(245,158,11,0.2)",
                       borderRadius: 8,
-                      padding: 24,
-                      textAlign: "center",
-                      color: "#666"
-                    }}>
-                      <Icon name="document" size={32} style={{ opacity: 0.3, marginBottom: 8 }} />
-                      <p style={{ margin: 0, fontSize: 13 }}>No source notes available for this proposal.</p>
-                      <p style={{ margin: "8px 0 0 0", fontSize: 11, color: "#555" }}>
-                        Source notes are automatically saved when you generate a proposal from the AI Agent.
-                      </p>
-                    </div>
-                  )}
+                      color: "#d1d5db",
+                      fontSize: 13,
+                      lineHeight: 1.6,
+                      fontFamily: "'JetBrains Mono', monospace",
+                      resize: "vertical",
+                      outline: "none"
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = "rgba(245,158,11,0.5)"}
+                    onBlur={(e) => e.target.style.borderColor = "rgba(245,158,11,0.2)"}
+                  />
                 </div>
 
-                {/* Copy source notes button */}
-                {selectedProposal.sourceNotes && (
-                  <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-                    <Btn
-                      variant="secondary"
-                      onClick={() => {
-                        navigator.clipboard.writeText(selectedProposal.sourceNotes);
-                        alert("Source notes copied to clipboard!");
-                      }}
-                      icon="copy"
-                    >
-                      Copy Source Notes
-                    </Btn>
-                  </div>
-                )}
+                {/* Action buttons */}
+                <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+                  <Btn
+                    variant="secondary"
+                    onClick={() => {
+                      navigator.clipboard.writeText(selectedProposal.sourceNotes || '');
+                      alert("Source notes copied to clipboard!");
+                    }}
+                    disabled={!selectedProposal.sourceNotes}
+                    icon="copy"
+                  >
+                    Copy Source Notes
+                  </Btn>
+                </div>
               </div>
             )}
 
