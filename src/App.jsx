@@ -3827,7 +3827,7 @@ const ProposalEditor = ({ proposals, setProposals }) => {
   };
 
   // Save changes to proposal
-  const handleSaveChanges = async () => {
+  const handleSaveChanges = () => {
     if (!selectedProposal) return;
     setIsSaving(true);
     setSaveStatus(null);
@@ -3838,7 +3838,9 @@ const ProposalEditor = ({ proposals, setProposals }) => {
         content: editedContent,
         lastModified: new Date().toISOString()
       };
-      await setProposals(prev => prev.map(p => p.id === selectedProposal.id ? updated : p));
+
+      // Update state immediately
+      setProposals(prev => prev.map(p => p.id === selectedProposal.id ? updated : p));
       setSelectedProposal(updated);
       setHasUnsavedChanges(false);
       setSaveStatus("saved");

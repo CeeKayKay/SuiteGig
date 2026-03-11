@@ -423,13 +423,16 @@ class DataService {
     return this.upsertMany('events', 'cs_events', events);
   }
 
-  // Proposals
+  // Proposals - primarily localStorage based (Supabase table may not exist)
   async getProposals() {
-    return this.getAll('proposals', 'cs_proposals', []);
+    // Always use localStorage for proposals
+    return loadLocal('cs_proposals', []);
   }
 
   async saveProposals(proposals) {
-    return this.upsertMany('proposals', 'cs_proposals', proposals);
+    // Always save to localStorage for proposals
+    saveLocal('cs_proposals', proposals);
+    return proposals;
   }
 
   // Credit Cards
