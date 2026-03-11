@@ -2865,13 +2865,22 @@ const AIAgent = ({ inquiries, setInquiries, onSendToProposals }) => {
   const [outputMode, setOutputMode] = useState("inquiry"); // "inquiry" or "proposal"
   const [proposalData, setProposalData] = useState(null);
   const [generatedProposal, setGeneratedProposal] = useState("");
-  const [archivedInput, setArchivedInput] = useState(""); // Store input when processing
+  const [archivedInput, setArchivedInput] = useState(() => {
+    return localStorage.getItem("sg_aiagent_archived") || "";
+  });
   const recognitionRef = useRef(null);
 
   // Save input to localStorage whenever it changes
   useEffect(() => {
     localStorage.setItem("sg_aiagent_input", inputText);
   }, [inputText]);
+
+  // Save archived input to localStorage
+  useEffect(() => {
+    if (archivedInput) {
+      localStorage.setItem("sg_aiagent_archived", archivedInput);
+    }
+  }, [archivedInput]);
 
   // Parse text to extract inquiry information
   const parseInquiryText = (text) => {
@@ -3374,7 +3383,7 @@ Best regards,
   };
 
   // Save to inquiries
-  const saveInquiry = () => {
+  const saveInquiry = async () => {
     if (!extractedData) return;
 
     const inquiry = {
@@ -3389,13 +3398,20 @@ Best regards,
       value: extractedData.value || 0,
       notes: extractedData.notes || "",
       nextSteps: "Review inquiry and follow up",
+      created_at: new Date().toISOString(),
+      sourceInput: archivedInput, // Store original AI Agent input
     };
 
-    setInquiries(prev => [...prev, inquiry]);
-    setExtractedData(null);
-    setInputText("");
-    setEditMode(false);
-    alert(`Inquiry "${inquiry.name}" saved successfully!`);
+    try {
+      await setInquiries(prev => [...prev, inquiry]);
+      setExtractedData(null);
+      setInputText("");
+      setEditMode(false);
+      alert(`Inquiry "${inquiry.name}" saved successfully!`);
+    } catch (err) {
+      console.error("Error saving inquiry:", err);
+      alert("Error saving inquiry. Please try again.");
+    }
   };
 
   // Update extracted field
@@ -3502,7 +3518,7 @@ Event With [Client Name]
             <Btn onClick={processText} disabled={!inputText.trim() || isProcessing} icon="sparkle">
               {isProcessing ? "Processing..." : outputMode === "inquiry" ? "Extract Information" : "Generate Proposal"}
             </Btn>
-            <Btn variant="secondary" onClick={() => { setInputText(""); setExtractedData(null); setProposalData(null); setGeneratedProposal(""); setEditMode(false); setArchivedInput(""); localStorage.removeItem("sg_aiagent_input"); }}>
+            <Btn variant="secondary" onClick={() => { setInputText(""); setExtractedData(null); setProposalData(null); setGeneratedProposal(""); setEditMode(false); setArchivedInput(""); localStorage.removeItem("sg_aiagent_input"); localStorage.removeItem("sg_aiagent_archived"); }}>
               Clear
             </Btn>
           </div>
