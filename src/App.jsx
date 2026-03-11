@@ -2859,6 +2859,9 @@ const AIAgent = ({ inquiries, setInquiries }) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [extractedData, setExtractedData] = useState(null);
   const [editMode, setEditMode] = useState(false);
+  const [outputMode, setOutputMode] = useState("inquiry"); // "inquiry" or "proposal"
+  const [proposalData, setProposalData] = useState(null);
+  const [generatedProposal, setGeneratedProposal] = useState("");
   const recognitionRef = useRef(null);
 
   // Parse text to extract inquiry information
@@ -3012,14 +3015,306 @@ const AIAgent = ({ inquiries, setInquiries }) => {
     return data;
   };
 
+  // Parse text for proposal generation
+  const parseProposalText = (text) => {
+    const data = {
+      clientName: "",
+      organizationName: "",
+      eventTitle: "",
+      audienceDescription: "",
+      eventType: "",
+      eventContext: "",
+      requirements: [],
+      themes: [],
+      availableDates: [],
+      sessionFormat: "",
+      duration: "",
+      technicalRequirements: [],
+      specialNotes: [],
+      rawText: text,
+    };
+
+    const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+    const fullText = text.toLowerCase();
+
+    // Extract organization/client name from first line or patterns
+    const orgPatterns = [
+      /^(?:event\s+(?:with|for)\s+)?([A-Z][A-Za-z\s&]+?)(?:\s*[-–]\s*|\n|$)/i,
+      /(?:client|organization|company|with):\s*([A-Z][A-Za-z\s&]+)/i,
+      /^([A-Z][A-Za-z\s&]+)\s+(?:event|retreat|conference|meeting)/i,
+    ];
+    for (const pattern of orgPatterns) {
+      const match = text.match(pattern);
+      if (match && match[1].length > 2 && match[1].length < 50) {
+        data.organizationName = match[1].trim();
+        break;
+      }
+    }
+
+    // Extract event title
+    const eventTitlePatterns = [
+      /event\s*(?:title|name)?:\s*([^\n]+)/i,
+      /(?:annual|yearly|quarterly)\s+([^\n]+(?:retreat|conference|summit|meeting|gathering))/i,
+    ];
+    for (const pattern of eventTitlePatterns) {
+      const match = text.match(pattern);
+      if (match) { data.eventTitle = match[1].trim(); break; }
+    }
+
+    // Extract audience description
+    const audiencePatterns = [
+      /(?:audience|attendees?|participants?|staff)(?:\s+(?:will be|are|includes?|of))?\s*(?::|-)?\s*([^\n]+)/i,
+      /([a-z\s,]+(?:workers?|nurses?|doctors?|professionals?|employees?|team members?|managers?|executives?))/i,
+    ];
+    for (const pattern of audiencePatterns) {
+      const match = text.match(pattern);
+      if (match) { data.audienceDescription = match[1].trim(); break; }
+    }
+
+    // Extract event type/context
+    const eventTypePatterns = [
+      /(annual|yearly|quarterly|monthly|bi-annual)\s+(retreat|conference|summit|meeting|gathering|celebration|training)/i,
+      /(?:it's a|this is a|for a|hosting a)\s+([^\n]+(?:retreat|conference|summit|meeting|event))/i,
+    ];
+    for (const pattern of eventTypePatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        data.eventType = match[0].trim();
+        break;
+      }
+    }
+
+    // Extract context/background
+    const contextPhrases = [];
+    if (fullText.includes('death') || fullText.includes('dying') || fullText.includes('hospice')) {
+      contextPhrases.push("Healthcare professionals dealing with end-of-life care");
+    }
+    if (fullText.includes('upbeat') || fullText.includes('positive') || fullText.includes('morale')) {
+      contextPhrases.push("Looking for uplifting content");
+    }
+    if (fullText.includes('stress') || fullText.includes('burnout')) {
+      contextPhrases.push("Addressing workplace stress and burnout");
+    }
+    data.eventContext = contextPhrases.join('. ');
+
+    // Extract requirements
+    const requirementKeywords = ['educational', 'entertaining', 'interactive', 'engaging', 'fun', 'informative', 'inspiring', 'motivational', 'upbeat', 'positive'];
+    requirementKeywords.forEach(keyword => {
+      if (fullText.includes(keyword)) {
+        data.requirements.push(keyword.charAt(0).toUpperCase() + keyword.slice(1));
+      }
+    });
+
+    // Extract themes/messaging
+    const themePatterns = [
+      /(?:theme|slogan|message|messaging|focus)(?:\s*(?:is|:|-))?\s*"?([^"\n]+)"?/gi,
+      /healing through [a-z]+/gi,
+      /(?:quality of life|improve\s+[a-z\s]+moments?)/gi,
+    ];
+    themePatterns.forEach(pattern => {
+      const matches = text.match(pattern);
+      if (matches) {
+        matches.forEach(m => {
+          const cleaned = m.replace(/^(?:theme|slogan|message|messaging|focus)(?:\s*(?:is|:|-))?\s*"?/i, '').replace(/"$/, '').trim();
+          if (cleaned && !data.themes.includes(cleaned)) {
+            data.themes.push(cleaned);
+          }
+        });
+      }
+    });
+
+    // Extract available dates
+    const datePatterns = [
+      /(?:available|possible|potential)\s+dates?[:\s]*([^\n]+)/i,
+      /\*?([A-Za-z]+\s+\d{1,2}(?:st|nd|rd|th)?(?:\s*[-–,]\s*[A-Za-z]*\s*\d{1,2}(?:st|nd|rd|th)?)?(?:\s*,?\s*\d{4})?(?:\s*[-–]\s*(?:tentative|tbc|confirmed))?)/gi,
+      /(?:date options?|dates?)[:\s]*\n?((?:[*•-]\s*[^\n]+\n?)+)/i,
+    ];
+    lines.forEach(line => {
+      if (line.match(/(?:april|may|june|july|august|september|october|november|december|january|february|march)\s+\d{1,2}/i)) {
+        const dateLine = line.replace(/^\*\s*/, '').trim();
+        if (dateLine && !data.availableDates.includes(dateLine)) {
+          data.availableDates.push(dateLine);
+        }
+      }
+    });
+
+    // Extract session format
+    const sessionPatterns = [
+      /(\d+)\s*(?:x|times?)\s*sessions?/i,
+      /(one|two|three|1|2|3)\s+sessions?\s*[-–]?\s*([^\n]+)?/i,
+      /(?:morning|afternoon|evening)\s+(?:and|&)\s+(?:morning|afternoon|evening)\s+sessions?/i,
+      /half\s+(?:of\s+)?(?:the\s+)?staff\s+in\s+the\s+(?:morning|afternoon)/i,
+    ];
+    for (const pattern of sessionPatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        data.sessionFormat = match[0].trim();
+        break;
+      }
+    }
+    // Look for more session details
+    if (fullText.includes('morning') && fullText.includes('afternoon')) {
+      if (!data.sessionFormat) data.sessionFormat = "Morning and afternoon sessions";
+      if (fullText.includes('half') && fullText.includes('staff')) {
+        data.sessionFormat += " (split staff attendance)";
+      }
+    }
+
+    // Extract duration
+    const durationPatterns = [
+      /(?:approximately|approx\.?|about|around)?\s*(\d+)\s*(?:minute|min)\s*(?:presentation|session|program)/i,
+      /(\d+(?:\s*[-–]\s*\d+)?)\s*(?:minute|min|hour|hr)s?/i,
+      /presentation\s*\+\s*Q&A/i,
+    ];
+    for (const pattern of durationPatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        data.duration = match[0].trim();
+        break;
+      }
+    }
+
+    // Extract technical requirements
+    const techRequirements = [];
+    const techKeywords = [
+      { pattern: /green\s*room/i, label: "Green Room" },
+      { pattern: /projector|screen|presentation/i, label: "Projector/Screen" },
+      { pattern: /microphone|mic|audio/i, label: "Audio/Microphone" },
+      { pattern: /stage|platform/i, label: "Stage/Platform" },
+      { pattern: /tables?|chairs?|seating/i, label: "Seating arrangement" },
+      { pattern: /parking/i, label: "Parking" },
+      { pattern: /meals?|lunch|breakfast|dinner|catering/i, label: "Meals provided" },
+    ];
+    techKeywords.forEach(({ pattern, label }) => {
+      if (pattern.test(text)) {
+        techRequirements.push(label);
+      }
+    });
+    data.technicalRequirements = techRequirements;
+
+    // Extract special notes
+    const specialNotePatterns = [
+      /(?:note|important|please note|keep in mind)[:\s]+([^\n]+)/gi,
+      /(?:sticking point|concern|consideration)[:\s]+([^\n]+)/gi,
+    ];
+    specialNotePatterns.forEach(pattern => {
+      const matches = [...text.matchAll(pattern)];
+      matches.forEach(match => {
+        if (match[1]) data.specialNotes.push(match[1].trim());
+      });
+    });
+
+    // Generate event title if not found
+    if (!data.eventTitle && data.organizationName) {
+      data.eventTitle = `${data.organizationName} ${data.eventType || 'Event'}`;
+    }
+
+    return data;
+  };
+
+  // Generate proposal document from parsed data
+  const generateProposal = (data) => {
+    const today = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+
+    let proposal = `
+═══════════════════════════════════════════════════════════════
+                         EVENT PROPOSAL
+═══════════════════════════════════════════════════════════════
+
+Date: ${today}
+Prepared for: ${data.organizationName || '[Organization Name]'}
+Event: ${data.eventTitle || '[Event Title]'}
+
+───────────────────────────────────────────────────────────────
+                     PROGRAM OVERVIEW
+───────────────────────────────────────────────────────────────
+
+${data.audienceDescription ? `AUDIENCE:\n${data.audienceDescription}\n` : ''}
+${data.eventContext ? `CONTEXT:\n${data.eventContext}\n` : ''}
+${data.requirements.length > 0 ? `\nPROGRAM REQUIREMENTS:\n${data.requirements.map(r => `  • ${r}`).join('\n')}\n` : ''}
+${data.themes.length > 0 ? `\nKEY THEMES & MESSAGING:\n${data.themes.map(t => `  • ${t}`).join('\n')}\n` : ''}
+
+───────────────────────────────────────────────────────────────
+                     PROPOSED PROGRAM
+───────────────────────────────────────────────────────────────
+
+[PROGRAM TITLE]
+An interactive and engaging presentation designed specifically for
+${data.audienceDescription || 'your team'}.
+
+PROGRAM HIGHLIGHTS:
+${data.requirements.map(r => `  ✓ ${r} content tailored to your audience`).join('\n')}
+
+${data.sessionFormat ? `\nSESSION FORMAT:\n${data.sessionFormat}\n` : ''}
+${data.duration ? `\nDURATION:\n${data.duration}\n` : ''}
+
+───────────────────────────────────────────────────────────────
+                     AVAILABLE DATES
+───────────────────────────────────────────────────────────────
+
+${data.availableDates.length > 0 ? data.availableDates.map(d => `  • ${d}`).join('\n') : 'Please confirm preferred date(s).'}
+
+───────────────────────────────────────────────────────────────
+                  TECHNICAL REQUIREMENTS
+───────────────────────────────────────────────────────────────
+
+${data.technicalRequirements.length > 0 ? data.technicalRequirements.map(t => `  • ${t}`).join('\n') : '  • Standard presentation setup\n  • Adequate space for audience'}
+
+${data.specialNotes.length > 0 ? `
+───────────────────────────────────────────────────────────────
+                     SPECIAL NOTES
+───────────────────────────────────────────────────────────────
+
+${data.specialNotes.map(n => `  • ${n}`).join('\n')}
+` : ''}
+
+───────────────────────────────────────────────────────────────
+                      INVESTMENT
+───────────────────────────────────────────────────────────────
+
+Program Fee:                              $[AMOUNT]
+${data.sessionFormat && data.sessionFormat.includes('2') ? `  (Includes both sessions)\n` : ''}
+Travel & Expenses:                        [TBD/Included]
+
+───────────────────────────────────────────────────────────────
+                      NEXT STEPS
+───────────────────────────────────────────────────────────────
+
+1. Review this proposal
+2. Confirm preferred date
+3. Sign agreement & submit deposit
+4. Pre-event planning call
+
+I look forward to creating a memorable experience for your team!
+
+Best regards,
+[YOUR NAME]
+[YOUR COMPANY]
+[CONTACT INFO]
+
+═══════════════════════════════════════════════════════════════
+`;
+
+    return proposal.trim();
+  };
+
   // Process the input text
   const processText = () => {
     if (!inputText.trim()) return;
     setIsProcessing(true);
 
     setTimeout(() => {
-      const extracted = parseInquiryText(inputText);
-      setExtractedData(extracted);
+      if (outputMode === "inquiry") {
+        const extracted = parseInquiryText(inputText);
+        setExtractedData(extracted);
+        setProposalData(null);
+        setGeneratedProposal("");
+      } else {
+        const extracted = parseProposalText(inputText);
+        setProposalData(extracted);
+        setGeneratedProposal(generateProposal(extracted));
+        setExtractedData(null);
+      }
       setIsProcessing(false);
       setEditMode(true);
     }, 500);
@@ -3100,7 +3395,41 @@ const AIAgent = ({ inquiries, setInquiries }) => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <div>
           <h2 style={{ fontSize: 24, fontWeight: 700, color: "#f0f0f0" }}>AI Agent</h2>
-          <p style={{ color: "#888", fontSize: 14 }}>Process emails, voice, or text to extract gig inquiry information</p>
+          <p style={{ color: "#888", fontSize: 14 }}>Process emails, voice, or text to extract gig inquiry information or generate proposals</p>
+        </div>
+        <div style={{ display: "flex", gap: 8, background: "rgba(255,255,255,0.03)", borderRadius: 10, padding: 4 }}>
+          <button
+            onClick={() => setOutputMode("inquiry")}
+            style={{
+              padding: "8px 16px",
+              borderRadius: 8,
+              border: "none",
+              background: outputMode === "inquiry" ? "#6366f1" : "transparent",
+              color: outputMode === "inquiry" ? "#fff" : "#888",
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: "pointer",
+              transition: "all 0.15s"
+            }}
+          >
+            Extract Inquiry
+          </button>
+          <button
+            onClick={() => setOutputMode("proposal")}
+            style={{
+              padding: "8px 16px",
+              borderRadius: 8,
+              border: "none",
+              background: outputMode === "proposal" ? "#10b981" : "transparent",
+              color: outputMode === "proposal" ? "#fff" : "#888",
+              fontSize: 13,
+              fontWeight: 500,
+              cursor: "pointer",
+              transition: "all 0.15s"
+            }}
+          >
+            Generate Proposal
+          </button>
         </div>
       </div>
 
@@ -3130,13 +3459,24 @@ const AIAgent = ({ inquiries, setInquiries }) => {
           <textarea
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
-            placeholder="Paste an email thread, forward, or type/dictate information about a gig inquiry...
+            placeholder={outputMode === "inquiry"
+              ? `Paste an email thread, forward, or type/dictate information about a gig inquiry...
 
 Example:
 - Email from booking agency
 - Salesforce notification
 - Voice note about a new lead
-- Any text describing an event inquiry"
+- Any text describing an event inquiry`
+              : `Paste notes from a client call, meeting, or email to generate a proposal...
+
+Example:
+Event With [Client Name]
+- Audience: healthcare professionals, nurses, etc.
+- Looking for educational and entertaining content
+- Available dates: April 17th, May 15th
+- 2 sessions - morning and afternoon
+- 60-90 minute presentation + Q&A
+- Needs: Green Room, projector/screen`}
             style={{
               width: "100%", minHeight: 300, padding: 16, borderRadius: 10,
               background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)",
@@ -3147,23 +3487,34 @@ Example:
 
           <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
             <Btn onClick={processText} disabled={!inputText.trim() || isProcessing} icon="sparkle">
-              {isProcessing ? "Processing..." : "Extract Information"}
+              {isProcessing ? "Processing..." : outputMode === "inquiry" ? "Extract Information" : "Generate Proposal"}
             </Btn>
-            <Btn variant="secondary" onClick={() => { setInputText(""); setExtractedData(null); setEditMode(false); }}>
+            <Btn variant="secondary" onClick={() => { setInputText(""); setExtractedData(null); setProposalData(null); setGeneratedProposal(""); setEditMode(false); }}>
               Clear
             </Btn>
           </div>
 
           {/* Quick tips */}
-          <div style={{ marginTop: 20, padding: 16, background: "rgba(99,102,241,0.06)", borderRadius: 10, border: "1px solid rgba(99,102,241,0.15)" }}>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "#a5b4fc", marginBottom: 8 }}>Tips for best results:</div>
-            <ul style={{ margin: 0, paddingLeft: 20, color: "#888", fontSize: 12, lineHeight: 1.6 }}>
-              <li>Include the event date (e.g., "April 2, 2026" or "04/02/2026")</li>
-              <li>Mention budget or rate (e.g., "$2,500" or "USD 2,500")</li>
-              <li>Include guest count (e.g., "200 guests" or "approximately 150 attendees")</li>
-              <li>Specify location/venue name</li>
-              <li>Include contact email for follow-up</li>
-            </ul>
+          <div style={{ marginTop: 20, padding: 16, background: outputMode === "inquiry" ? "rgba(99,102,241,0.06)" : "rgba(16,185,129,0.06)", borderRadius: 10, border: outputMode === "inquiry" ? "1px solid rgba(99,102,241,0.15)" : "1px solid rgba(16,185,129,0.15)" }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: outputMode === "inquiry" ? "#a5b4fc" : "#6ee7b7", marginBottom: 8 }}>Tips for best results:</div>
+            {outputMode === "inquiry" ? (
+              <ul style={{ margin: 0, paddingLeft: 20, color: "#888", fontSize: 12, lineHeight: 1.6 }}>
+                <li>Include the event date (e.g., "April 2, 2026" or "04/02/2026")</li>
+                <li>Mention budget or rate (e.g., "$2,500" or "USD 2,500")</li>
+                <li>Include guest count (e.g., "200 guests" or "approximately 150 attendees")</li>
+                <li>Specify location/venue name</li>
+                <li>Include contact email for follow-up</li>
+              </ul>
+            ) : (
+              <ul style={{ margin: 0, paddingLeft: 20, color: "#888", fontSize: 12, lineHeight: 1.6 }}>
+                <li>Include client/organization name</li>
+                <li>Describe the audience (e.g., "healthcare workers", "corporate team")</li>
+                <li>Note any themes or messaging requirements</li>
+                <li>List available dates with any constraints</li>
+                <li>Specify session format and duration</li>
+                <li>Include technical requirements (green room, AV needs, etc.)</li>
+              </ul>
+            )}
           </div>
         </div>
 
@@ -3215,6 +3566,153 @@ Example:
               <div style={{ fontSize: 11, color: "#666", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>Original Text</div>
               <div style={{ fontSize: 11, color: "#888", maxHeight: 100, overflowY: "auto", whiteSpace: "pre-wrap", fontFamily: "'JetBrains Mono', monospace" }}>
                 {extractedData.rawText}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Proposal Generation Section */}
+        {editMode && proposalData && generatedProposal && (
+          <div style={{ background: "#1a1d23", borderRadius: 14, padding: 24, border: "1px solid rgba(16,185,129,0.2)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 600, color: "#f0f0f0", display: "flex", alignItems: "center", gap: 8 }}>
+                <Icon name="document" size={18} /> Generated Proposal
+              </h3>
+              <div style={{ display: "flex", gap: 8 }}>
+                <Badge color="#10b981">Ready to Edit</Badge>
+              </div>
+            </div>
+
+            {/* Extracted Details Summary */}
+            <div style={{ marginBottom: 20, padding: 16, background: "rgba(16,185,129,0.06)", borderRadius: 10, border: "1px solid rgba(16,185,129,0.15)" }}>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#10b981", marginBottom: 12 }}>Extracted Details</div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                {proposalData.organizationName && (
+                  <div>
+                    <div style={{ fontSize: 10, color: "#666", textTransform: "uppercase", marginBottom: 2 }}>Organization</div>
+                    <div style={{ fontSize: 13, color: "#f0f0f0" }}>{proposalData.organizationName}</div>
+                  </div>
+                )}
+                {proposalData.eventTitle && (
+                  <div>
+                    <div style={{ fontSize: 10, color: "#666", textTransform: "uppercase", marginBottom: 2 }}>Event</div>
+                    <div style={{ fontSize: 13, color: "#f0f0f0" }}>{proposalData.eventTitle}</div>
+                  </div>
+                )}
+                {proposalData.audienceDescription && (
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <div style={{ fontSize: 10, color: "#666", textTransform: "uppercase", marginBottom: 2 }}>Audience</div>
+                    <div style={{ fontSize: 13, color: "#f0f0f0" }}>{proposalData.audienceDescription}</div>
+                  </div>
+                )}
+                {proposalData.requirements.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 10, color: "#666", textTransform: "uppercase", marginBottom: 2 }}>Requirements</div>
+                    <div style={{ fontSize: 13, color: "#f0f0f0" }}>{proposalData.requirements.join(", ")}</div>
+                  </div>
+                )}
+                {proposalData.duration && (
+                  <div>
+                    <div style={{ fontSize: 10, color: "#666", textTransform: "uppercase", marginBottom: 2 }}>Duration</div>
+                    <div style={{ fontSize: 13, color: "#f0f0f0" }}>{proposalData.duration}</div>
+                  </div>
+                )}
+                {proposalData.sessionFormat && (
+                  <div>
+                    <div style={{ fontSize: 10, color: "#666", textTransform: "uppercase", marginBottom: 2 }}>Sessions</div>
+                    <div style={{ fontSize: 13, color: "#f0f0f0" }}>{proposalData.sessionFormat}</div>
+                  </div>
+                )}
+                {proposalData.availableDates.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 10, color: "#666", textTransform: "uppercase", marginBottom: 2 }}>Available Dates</div>
+                    <div style={{ fontSize: 13, color: "#f0f0f0" }}>{proposalData.availableDates.join(", ")}</div>
+                  </div>
+                )}
+                {proposalData.technicalRequirements.length > 0 && (
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <div style={{ fontSize: 10, color: "#666", textTransform: "uppercase", marginBottom: 2 }}>Technical Requirements</div>
+                    <div style={{ fontSize: 13, color: "#f0f0f0" }}>{proposalData.technicalRequirements.join(", ")}</div>
+                  </div>
+                )}
+                {proposalData.themes.length > 0 && (
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <div style={{ fontSize: 10, color: "#666", textTransform: "uppercase", marginBottom: 2 }}>Themes/Messaging</div>
+                    <div style={{ fontSize: 13, color: "#f0f0f0" }}>{proposalData.themes.join(", ")}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Proposal Text Area */}
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 12, color: "#888", marginBottom: 8 }}>Edit the generated proposal below:</div>
+              <textarea
+                value={generatedProposal}
+                onChange={(e) => setGeneratedProposal(e.target.value)}
+                style={{
+                  width: "100%",
+                  minHeight: 400,
+                  padding: 16,
+                  borderRadius: 10,
+                  background: "rgba(255,255,255,0.03)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  color: "#f0f0f0",
+                  fontSize: 12,
+                  fontFamily: "'JetBrains Mono', monospace",
+                  resize: "vertical",
+                  outline: "none",
+                  lineHeight: 1.5
+                }}
+              />
+            </div>
+
+            {/* Action Buttons */}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <Btn
+                onClick={() => {
+                  navigator.clipboard.writeText(generatedProposal);
+                  alert("Proposal copied to clipboard!");
+                }}
+                icon="copy"
+              >
+                Copy to Clipboard
+              </Btn>
+              <Btn
+                variant="secondary"
+                onClick={() => {
+                  const blob = new Blob([generatedProposal], { type: 'text/plain' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `proposal-${proposalData.organizationName?.replace(/\s+/g, '-').toLowerCase() || 'draft'}-${new Date().toISOString().split('T')[0]}.txt`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                icon="download"
+              >
+                Download as Text
+              </Btn>
+              <Btn
+                variant="secondary"
+                onClick={() => setGeneratedProposal(generateProposal(proposalData))}
+                icon="refresh"
+              >
+                Regenerate
+              </Btn>
+              <Btn
+                variant="secondary"
+                onClick={() => { setEditMode(false); setProposalData(null); setGeneratedProposal(""); }}
+              >
+                Cancel
+              </Btn>
+            </div>
+
+            {/* Original text reference */}
+            <div style={{ marginTop: 20, padding: 12, background: "rgba(255,255,255,0.02)", borderRadius: 8, border: "1px solid rgba(255,255,255,0.05)" }}>
+              <div style={{ fontSize: 11, color: "#666", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>Original Input</div>
+              <div style={{ fontSize: 11, color: "#888", maxHeight: 100, overflowY: "auto", whiteSpace: "pre-wrap", fontFamily: "'JetBrains Mono', monospace" }}>
+                {proposalData.rawText}
               </div>
             </div>
           </div>
