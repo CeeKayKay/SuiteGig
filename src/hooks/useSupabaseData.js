@@ -168,6 +168,19 @@ export function useSuiteGigData() {
             customCategories,
             budgets
           });
+
+          // Auto-sync local data to cloud after loading
+          if (isSupabaseConfigured()) {
+            dataService.forceSyncToCloud().then(result => {
+              if (result.success) {
+                console.log('[AutoSync] Data synced to cloud:', result.results);
+              } else if (result.error) {
+                console.warn('[AutoSync] Sync failed:', result.error);
+              }
+            }).catch(err => {
+              console.warn('[AutoSync] Sync error:', err);
+            });
+          }
         }
       } catch (err) {
         console.error('Error loading data:', err);

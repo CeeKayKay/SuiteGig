@@ -66,39 +66,88 @@ class DataService {
   async forceSyncToCloud() {
     if (!this.useSupabase) {
       console.log('[DataService] Supabase not configured, cannot sync');
-      return { success: false, error: 'Supabase not configured' };
+      return { success: false, error: 'Supabase not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to your .env.local file.' };
     }
 
     console.log('[DataService] Force syncing all data to Supabase...');
     const results = {};
+    const errors = [];
+
+    // Helper to sync a collection
+    const syncCollection = async (localKey, saveFn, name) => {
+      try {
+        const localData = loadLocal(localKey, []);
+        if (Array.isArray(localData) && localData.length > 0) {
+          await saveFn.call(this, localData);
+          results[name] = localData.length;
+          console.log(`[DataService] Synced ${localData.length} ${name}`);
+        }
+      } catch (err) {
+        console.error(`[DataService] Failed to sync ${name}:`, err);
+        errors.push({ name, error: err.message });
+      }
+    };
+
+    // Helper to sync an object
+    const syncObject = async (localKey, saveFn, name) => {
+      try {
+        const localData = loadLocal(localKey, {});
+        if (Object.keys(localData).length > 0) {
+          await saveFn.call(this, localData);
+          results[name] = Object.keys(localData).length;
+          console.log(`[DataService] Synced ${name}`);
+        }
+      } catch (err) {
+        console.error(`[DataService] Failed to sync ${name}:`, err);
+        errors.push({ name, error: err.message });
+      }
+    };
 
     try {
-      // Sync category rules
-      const localRules = loadLocal('cs_categoryRules', {});
-      if (Object.keys(localRules).length > 0) {
-        await this.saveCategoryRules(localRules);
-        results.categoryRules = Object.keys(localRules).length;
-      }
+      // Sync all collections
+      await syncCollection('cs_transactions', this.saveTransactions, 'transactions');
+      await syncCollection('cs_invoices', this.saveInvoices, 'invoices');
+      await syncCollection('cs_inquiries', this.saveInquiries, 'inquiries');
+      await syncCollection('cs_contracts', this.saveContracts, 'contracts');
+      await syncCollection('cs_events', this.saveEvents, 'events');
+      await syncCollection('cs_proposals', this.saveProposals, 'proposals');
+      await syncCollection('cs_expenses', this.saveExpenses, 'expenses');
+      await syncCollection('cs_creditCards', this.saveCreditCards, 'creditCards');
+      await syncCollection('cs_bankAccounts', this.saveBankAccounts, 'bankAccounts');
+      await syncCollection('cs_customCategories', this.saveCustomCategories, 'customCategories');
 
-      // Sync custom categories
-      const localCategories = loadLocal('cs_customCategories', []);
-      if (localCategories.length > 0) {
-        await this.saveCustomCategories(localCategories);
-        results.customCategories = localCategories.length;
-      }
-
-      // Sync expenses
-      const localExpenses = loadLocal('cs_expenses', []);
-      if (localExpenses.length > 0) {
-        await this.saveExpenses(localExpenses);
-        results.expenses = localExpenses.length;
-      }
+      // Sync objects
+      await syncObject('cs_categoryRules', this.saveCategoryRules, 'categoryRules');
+      await syncObject('cs_budgets', this.saveBudgets, 'budgets');
 
       console.log('[DataService] Force sync complete:', results);
+
+      if (errors.length > 0) {
+        return { success: true, partial: true, results, errors };
+      }
       return { success: true, results };
     } catch (err) {
       console.error('[DataService] Force sync failed:', err);
-      return { success: false, error: err.message };
+      return { success: false, error: err.message, results, errors };
+    }
+  }
+
+  // Check Supabase connection status
+  async checkConnection() {
+    if (!this.useSupabase) {
+      return { connected: false, reason: 'Supabase not configured' };
+    }
+    try {
+      const { error } = await supabase.from('inquiries').select('id').limit(1);
+      if (error && error.code === '42P01') {
+        return { connected: true, tablesExist: false, reason: 'Tables not created yet' };
+      }
+      if (error) {
+        return { connected: false, reason: error.message };
+      }
+      return { connected: true, tablesExist: true };
+    } catch (err) {
+      return { connected: false, reason: err.message };
     }
   }
 
