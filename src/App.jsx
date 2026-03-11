@@ -3810,10 +3810,118 @@ const ProposalEditor = ({ proposals, setProposals }) => {
     localStorage.setItem("sg_proposalSettings", JSON.stringify(companySettings));
   }, [companySettings]);
 
+  // Convert ASCII proposal to HTML for WYSIWYG editing
+  const convertAsciiToHTML = (text) => {
+    if (!text) return '';
+    // If content already has HTML tags, it's been converted
+    if (text.includes('<h1') || text.includes('<h2') || text.includes('<div style')) {
+      return text;
+    }
+
+    const lines = text.split('\n');
+    const htmlLines = [];
+    let inList = false;
+    let listType = 'ul';
+
+    for (let i = 0; i < lines.length; i++) {
+      let line = lines[i];
+
+      // Skip ASCII box characters
+      if (/^[═─]+$/.test(line.trim())) continue;
+      if (line.trim() === '') {
+        if (inList) { htmlLines.push(`</${listType}>`); inList = false; }
+        htmlLines.push('<div style="height: 16px;"></div>');
+        continue;
+      }
+
+      // Main title
+      if (/^\s*EVENT PROPOSAL\s*$/.test(line)) {
+        if (inList) { htmlLines.push(`</${listType}>`); inList = false; }
+        htmlLines.push('<h1 style="text-align: center; color: #6366f1; margin: 24px 0 32px 0; font-size: 28px; font-weight: 700;">EVENT PROPOSAL</h1>');
+        continue;
+      }
+
+      // Section headers (ALL CAPS)
+      if (/^\s*[A-Z][A-Z\s&]{2,}\s*$/.test(line)) {
+        const title = line.trim();
+        if (title !== 'EVENT PROPOSAL') {
+          if (inList) { htmlLines.push(`</${listType}>`); inList = false; }
+          htmlLines.push(`<div style="margin-top: 28px; margin-bottom: 16px; padding-top: 20px; border-top: 2px solid #e5e7eb;"><h2 style="color: #6366f1; font-size: 16px; font-weight: 700; margin: 0; text-transform: uppercase; letter-spacing: 1px;">${title}</h2></div>`);
+          continue;
+        }
+      }
+
+      // Bullet points
+      if (/^\s*[•]\s*(.+)$/.test(line)) {
+        const match = line.match(/^\s*[•]\s*(.+)$/);
+        if (!inList || listType !== 'ul') {
+          if (inList) htmlLines.push(`</${listType}>`);
+          htmlLines.push('<ul style="margin: 12px 0 12px 24px; padding: 0; list-style-type: disc;">');
+          inList = true; listType = 'ul';
+        }
+        htmlLines.push(`<li style="margin-bottom: 10px; line-height: 1.7; padding-left: 8px;">${match[1]}</li>`);
+        continue;
+      }
+
+      // Checkmarks
+      if (/^\s*[✓]\s*(.+)$/.test(line)) {
+        const match = line.match(/^\s*[✓]\s*(.+)$/);
+        if (!inList) {
+          htmlLines.push('<ul style="margin: 12px 0 12px 24px; padding: 0; list-style-type: none;">');
+          inList = true; listType = 'ul';
+        }
+        htmlLines.push(`<li style="margin-bottom: 10px; line-height: 1.7; color: #10b981;">✓ ${match[1]}</li>`);
+        continue;
+      }
+
+      // Numbered items
+      if (/^\s*(\d+)\.\s+(.+)$/.test(line)) {
+        const match = line.match(/^\s*(\d+)\.\s+(.+)$/);
+        if (!inList || listType !== 'ol') {
+          if (inList) htmlLines.push(`</${listType}>`);
+          htmlLines.push('<ol style="margin: 12px 0 12px 24px; padding: 0;">');
+          inList = true; listType = 'ol';
+        }
+        htmlLines.push(`<li style="margin-bottom: 10px; line-height: 1.7; padding-left: 8px;">${match[2]}</li>`);
+        continue;
+      }
+
+      // Close list if not a list item
+      if (inList) { htmlLines.push(`</${listType}>`); inList = false; }
+
+      // Key-value pairs
+      if (/^([A-Za-z][A-Za-z\s&]+):\s*(.+)$/.test(line)) {
+        const match = line.match(/^([A-Za-z][A-Za-z\s&]+):\s*(.+)$/);
+        htmlLines.push(`<p style="margin: 10px 0; line-height: 1.7;"><strong>${match[1]}:</strong> ${match[2]}</p>`);
+        continue;
+      }
+
+      // Signature section
+      if (line.includes('Best regards,')) {
+        htmlLines.push('<div style="margin-top: 40px;"><p style="margin: 8px 0;"><em>Best regards,</em></p>');
+        continue;
+      }
+      if (line.includes('[YOUR NAME]')) { htmlLines.push('<p style="margin: 4px 0; font-weight: 600;">[YOUR NAME]</p>'); continue; }
+      if (line.includes('[YOUR COMPANY]')) { htmlLines.push('<p style="margin: 4px 0; color: #666;">[YOUR COMPANY]</p>'); continue; }
+      if (line.includes('[CONTACT INFO]')) { htmlLines.push('<p style="margin: 4px 0; color: #666;">[CONTACT INFO]</p></div>'); continue; }
+
+      // Regular paragraph
+      const trimmed = line.trim();
+      if (trimmed) {
+        htmlLines.push(`<p style="margin: 10px 0; line-height: 1.7;">${trimmed}</p>`);
+      }
+    }
+
+    if (inList) htmlLines.push(`</${listType}>`);
+    return htmlLines.join('\n');
+  };
+
   // Select a proposal for editing
   const handleSelectProposal = (proposal) => {
     setSelectedProposal(proposal);
-    setEditedContent(proposal.content);
+    // Convert ASCII to HTML if needed
+    const content = convertAsciiToHTML(proposal.content);
+    setEditedContent(content);
     setShowPreview(false);
     setHasUnsavedChanges(false);
     setSaveStatus(null);
