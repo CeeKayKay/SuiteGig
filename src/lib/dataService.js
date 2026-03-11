@@ -423,6 +423,15 @@ class DataService {
     return this.upsertMany('events', 'cs_events', events);
   }
 
+  // Proposals
+  async getProposals() {
+    return this.getAll('proposals', 'cs_proposals', []);
+  }
+
+  async saveProposals(proposals) {
+    return this.upsertMany('proposals', 'cs_proposals', proposals);
+  }
+
   // Credit Cards
   async getCreditCards() {
     return this.getAll('credit_cards', 'cs_creditCards', []);

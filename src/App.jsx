@@ -2853,7 +2853,7 @@ const Invoicing = ({ invoices, setInvoices }) => {
 // SECTION: AI AGENT - Process emails/voice/text into inquiries
 // ═══════════════════════════════════════════════════════
 
-const AIAgent = ({ inquiries, setInquiries }) => {
+const AIAgent = ({ inquiries, setInquiries, onSendToProposals }) => {
   const [inputText, setInputText] = useState("");
   const [isListening, setIsListening] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -3671,6 +3671,30 @@ Event With [Client Name]
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               <Btn
                 onClick={() => {
+                  if (onSendToProposals) {
+                    onSendToProposals({
+                      id: generateId(),
+                      title: proposalData.eventTitle || proposalData.organizationName || "New Proposal",
+                      client: proposalData.organizationName || "",
+                      content: generatedProposal,
+                      extractedData: proposalData,
+                      status: "draft",
+                      createdDate: new Date().toISOString(),
+                      lastModified: new Date().toISOString(),
+                    });
+                    setEditMode(false);
+                    setProposalData(null);
+                    setGeneratedProposal("");
+                    setInputText("");
+                  }
+                }}
+                icon="send"
+              >
+                Send to Proposal Editor
+              </Btn>
+              <Btn
+                variant="secondary"
+                onClick={() => {
                   navigator.clipboard.writeText(generatedProposal);
                   alert("Proposal copied to clipboard!");
                 }}
@@ -3747,6 +3771,616 @@ Event With [Client Name]
           50% { opacity: 0.5; }
         }
       `}</style>
+    </div>
+  );
+};
+
+// ═══════════════════════════════════════════════════════
+// SECTION: PROPOSAL EDITOR
+// ═══════════════════════════════════════════════════════
+
+const ProposalEditor = ({ proposals, setProposals }) => {
+  const [selectedProposal, setSelectedProposal] = useState(null);
+  const [editedContent, setEditedContent] = useState("");
+  const [showPreview, setShowPreview] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+
+  // Proposal template settings
+  const [companySettings, setCompanySettings] = useState(() => {
+    const saved = localStorage.getItem("sg_proposalSettings");
+    return saved ? JSON.parse(saved) : {
+      companyName: "Your Company Name",
+      contactName: "Your Name",
+      email: "email@company.com",
+      phone: "(555) 123-4567",
+      website: "www.yourcompany.com",
+      logo: null,
+      accentColor: "#6366f1"
+    };
+  });
+
+  const [showSettings, setShowSettings] = useState(false);
+
+  // Save settings to localStorage
+  useEffect(() => {
+    localStorage.setItem("sg_proposalSettings", JSON.stringify(companySettings));
+  }, [companySettings]);
+
+  // Select a proposal for editing
+  const handleSelectProposal = (proposal) => {
+    setSelectedProposal(proposal);
+    setEditedContent(proposal.content);
+    setShowPreview(false);
+  };
+
+  // Save changes to proposal
+  const handleSaveChanges = () => {
+    if (!selectedProposal) return;
+    const updated = {
+      ...selectedProposal,
+      content: editedContent,
+      lastModified: new Date().toISOString()
+    };
+    setProposals(prev => prev.map(p => p.id === selectedProposal.id ? updated : p));
+    setSelectedProposal(updated);
+  };
+
+  // Update proposal status
+  const handleUpdateStatus = (status) => {
+    if (!selectedProposal) return;
+    const updated = { ...selectedProposal, status, lastModified: new Date().toISOString() };
+    setProposals(prev => prev.map(p => p.id === selectedProposal.id ? updated : p));
+    setSelectedProposal(updated);
+  };
+
+  // Delete proposal
+  const handleDeleteProposal = (id) => {
+    if (!confirm("Are you sure you want to delete this proposal?")) return;
+    setProposals(prev => prev.filter(p => p.id !== id));
+    if (selectedProposal?.id === id) {
+      setSelectedProposal(null);
+      setEditedContent("");
+    }
+  };
+
+  // Format proposal content for PDF - convert ASCII to styled HTML
+  const formatProposalForPDF = (content) => {
+    // Replace ASCII box drawing with styled sections
+    let formatted = content
+      // Remove ASCII box characters
+      .replace(/═+/g, '')
+      .replace(/─+/g, '')
+      // Convert section headers
+      .replace(/^(\s*)([A-Z][A-Z\s&]+)$/gm, (match, space, title) => {
+        const trimmed = title.trim();
+        if (trimmed === 'EVENT PROPOSAL') {
+          return `<h1 class="proposal-title">${trimmed}</h1>`;
+        }
+        return `<h2 class="section-header">${trimmed}</h2>`;
+      })
+      // Convert bullet points
+      .replace(/^\s*[•✓]\s*(.+)$/gm, '<li>$1</li>')
+      // Convert lines starting with checkmarks
+      .replace(/^\s*✓\s*(.+)$/gm, '<li class="check">$1</li>')
+      // Wrap consecutive list items
+      .replace(/(<li[^>]*>.*<\/li>\n?)+/g, '<ul>$&</ul>')
+      // Convert key-value pairs
+      .replace(/^([A-Z][A-Za-z\s]+):\s*(.+)$/gm, '<p><strong>$1:</strong> $2</p>')
+      // Preserve line breaks
+      .replace(/\n\n/g, '</p><p>')
+      .replace(/\n/g, '<br>');
+
+    return formatted;
+  };
+
+  // Generate PDF using browser print
+  const handleExportPDF = async () => {
+    setIsExporting(true);
+
+    // Create a new window for printing
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      alert('Please allow popups to export PDF');
+      setIsExporting(false);
+      return;
+    }
+
+    const proposalHTML = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>${selectedProposal?.title || 'Proposal'}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    @page {
+      size: letter;
+      margin: 0.75in;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 11pt;
+      line-height: 1.6;
+      color: #1f2937;
+      background: white;
+    }
+
+    .proposal-container {
+      max-width: 100%;
+      padding: 0;
+    }
+
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      padding-bottom: 24px;
+      border-bottom: 3px solid ${companySettings.accentColor};
+      margin-bottom: 32px;
+    }
+
+    .company-info h1 {
+      font-size: 24pt;
+      font-weight: 700;
+      color: ${companySettings.accentColor};
+      margin-bottom: 4px;
+    }
+
+    .company-info p {
+      font-size: 10pt;
+      color: #6b7280;
+    }
+
+    .proposal-meta {
+      text-align: right;
+      font-size: 10pt;
+      color: #6b7280;
+    }
+
+    .proposal-meta strong {
+      color: #1f2937;
+      display: block;
+      font-size: 11pt;
+    }
+
+    .proposal-title {
+      font-size: 20pt;
+      font-weight: 700;
+      color: #1f2937;
+      text-align: center;
+      margin: 32px 0;
+      padding: 16px;
+      background: linear-gradient(135deg, ${companySettings.accentColor}10, ${companySettings.accentColor}05);
+      border-radius: 8px;
+    }
+
+    .section-header {
+      font-size: 13pt;
+      font-weight: 600;
+      color: ${companySettings.accentColor};
+      margin-top: 28px;
+      margin-bottom: 12px;
+      padding-bottom: 6px;
+      border-bottom: 2px solid ${companySettings.accentColor}30;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .content {
+      white-space: pre-wrap;
+      font-size: 11pt;
+      line-height: 1.7;
+    }
+
+    .content p {
+      margin-bottom: 8px;
+    }
+
+    .content ul {
+      margin: 12px 0;
+      padding-left: 24px;
+    }
+
+    .content li {
+      margin-bottom: 6px;
+    }
+
+    .content li.check::marker {
+      content: "✓ ";
+      color: ${companySettings.accentColor};
+    }
+
+    .highlight-box {
+      background: ${companySettings.accentColor}08;
+      border-left: 4px solid ${companySettings.accentColor};
+      padding: 16px 20px;
+      margin: 20px 0;
+      border-radius: 0 8px 8px 0;
+    }
+
+    .footer {
+      margin-top: 48px;
+      padding-top: 24px;
+      border-top: 2px solid #e5e7eb;
+      text-align: center;
+      font-size: 10pt;
+      color: #6b7280;
+    }
+
+    .footer strong {
+      color: ${companySettings.accentColor};
+    }
+
+    .signature-line {
+      margin-top: 48px;
+      display: flex;
+      justify-content: space-between;
+      gap: 48px;
+    }
+
+    .signature-block {
+      flex: 1;
+      text-align: center;
+    }
+
+    .signature-block .line {
+      border-top: 1px solid #1f2937;
+      margin-bottom: 8px;
+      margin-top: 48px;
+    }
+
+    .signature-block p {
+      font-size: 10pt;
+      color: #6b7280;
+    }
+
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <div class="proposal-container">
+    <div class="header">
+      <div class="company-info">
+        <h1>${companySettings.companyName}</h1>
+        <p>${companySettings.contactName}</p>
+        <p>${companySettings.email} | ${companySettings.phone}</p>
+        ${companySettings.website ? `<p>${companySettings.website}</p>` : ''}
+      </div>
+      <div class="proposal-meta">
+        <strong>PROPOSAL</strong>
+        <p>Date: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+        <p>Prepared for: ${selectedProposal?.client || 'Client'}</p>
+      </div>
+    </div>
+
+    <div class="content">
+      ${formatProposalForPDF(editedContent)}
+    </div>
+
+    <div class="signature-line">
+      <div class="signature-block">
+        <div class="line"></div>
+        <p>Client Signature</p>
+        <p style="margin-top: 4px; color: #9ca3af;">Date: _______________</p>
+      </div>
+      <div class="signature-block">
+        <div class="line"></div>
+        <p>${companySettings.contactName}</p>
+        <p style="margin-top: 4px; color: #9ca3af;">${companySettings.companyName}</p>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p>Thank you for considering <strong>${companySettings.companyName}</strong></p>
+      <p style="margin-top: 4px;">${companySettings.email} | ${companySettings.phone}</p>
+    </div>
+  </div>
+
+  <script>
+    window.onload = function() {
+      setTimeout(function() {
+        window.print();
+        window.onafterprint = function() { window.close(); };
+      }, 250);
+    };
+  </script>
+</body>
+</html>`;
+
+    printWindow.document.write(proposalHTML);
+    printWindow.document.close();
+
+    setTimeout(() => setIsExporting(false), 1000);
+  };
+
+  // Get status badge color
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'draft': return '#6b7280';
+      case 'sent': return '#3b82f6';
+      case 'accepted': return '#10b981';
+      case 'declined': return '#ef4444';
+      default: return '#6b7280';
+    }
+  };
+
+  return (
+    <div>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+        <div>
+          <h2 style={{ fontSize: 24, fontWeight: 700, color: "#f0f0f0" }}>Proposal Editor</h2>
+          <p style={{ color: "#888", fontSize: 14 }}>Edit, preview, and export professional proposals</p>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Btn variant="secondary" icon="settings" onClick={() => setShowSettings(!showSettings)}>
+            Settings
+          </Btn>
+        </div>
+      </div>
+
+      {/* Settings Panel */}
+      {showSettings && (
+        <div style={{ background: "#1a1d23", borderRadius: 14, padding: 24, marginBottom: 24, border: "1px solid rgba(255,255,255,0.05)" }}>
+          <h3 style={{ fontSize: 16, fontWeight: 600, color: "#f0f0f0", marginBottom: 16 }}>Company Settings</h3>
+          <p style={{ color: "#888", fontSize: 12, marginBottom: 16 }}>These details will appear on your exported proposals</p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <Input label="Company Name" value={companySettings.companyName} onChange={(v) => setCompanySettings(prev => ({ ...prev, companyName: v }))} />
+            <Input label="Contact Name" value={companySettings.contactName} onChange={(v) => setCompanySettings(prev => ({ ...prev, contactName: v }))} />
+            <Input label="Email" value={companySettings.email} onChange={(v) => setCompanySettings(prev => ({ ...prev, email: v }))} />
+            <Input label="Phone" value={companySettings.phone} onChange={(v) => setCompanySettings(prev => ({ ...prev, phone: v }))} />
+            <Input label="Website" value={companySettings.website} onChange={(v) => setCompanySettings(prev => ({ ...prev, website: v }))} />
+            <div>
+              <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 6 }}>Accent Color</label>
+              <input
+                type="color"
+                value={companySettings.accentColor}
+                onChange={(e) => setCompanySettings(prev => ({ ...prev, accentColor: e.target.value }))}
+                style={{ width: "100%", height: 40, border: "none", borderRadius: 8, cursor: "pointer" }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Main Content */}
+      <div style={{ display: "grid", gridTemplateColumns: selectedProposal ? "300px 1fr" : "1fr", gap: 24 }}>
+        {/* Proposals List */}
+        <div style={{ background: "#1a1d23", borderRadius: 14, padding: 20, border: "1px solid rgba(255,255,255,0.05)", maxHeight: "calc(100vh - 200px)", overflowY: "auto" }}>
+          <h3 style={{ fontSize: 14, fontWeight: 600, color: "#888", marginBottom: 16, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+            Proposals ({proposals.length})
+          </h3>
+
+          {proposals.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "40px 20px", color: "#666" }}>
+              <Icon name="document" size={48} />
+              <p style={{ marginTop: 16, fontSize: 14 }}>No proposals yet</p>
+              <p style={{ fontSize: 12, color: "#555", marginTop: 8 }}>Use the AI Agent to generate your first proposal</p>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {proposals.map(proposal => (
+                <div
+                  key={proposal.id}
+                  onClick={() => handleSelectProposal(proposal)}
+                  style={{
+                    padding: 16,
+                    borderRadius: 10,
+                    background: selectedProposal?.id === proposal.id ? "rgba(99,102,241,0.1)" : "rgba(255,255,255,0.02)",
+                    border: selectedProposal?.id === proposal.id ? "1px solid rgba(99,102,241,0.3)" : "1px solid rgba(255,255,255,0.05)",
+                    cursor: "pointer",
+                    transition: "all 0.15s"
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: "#f0f0f0", flex: 1, marginRight: 8 }}>{proposal.title}</div>
+                    <Badge color={getStatusColor(proposal.status)}>{proposal.status}</Badge>
+                  </div>
+                  <div style={{ fontSize: 12, color: "#888" }}>{proposal.client}</div>
+                  <div style={{ fontSize: 11, color: "#666", marginTop: 8 }}>
+                    {new Date(proposal.lastModified || proposal.createdDate).toLocaleDateString()}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Editor / Preview Panel */}
+        {selectedProposal && (
+          <div style={{ background: "#1a1d23", borderRadius: 14, padding: 24, border: "1px solid rgba(255,255,255,0.05)" }}>
+            {/* Editor Header */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div>
+                <Input
+                  value={selectedProposal.title}
+                  onChange={(v) => {
+                    const updated = { ...selectedProposal, title: v };
+                    setSelectedProposal(updated);
+                    setProposals(prev => prev.map(p => p.id === selectedProposal.id ? updated : p));
+                  }}
+                  style={{ fontSize: 18, fontWeight: 600, background: "transparent", border: "none", padding: 0, color: "#f0f0f0" }}
+                />
+                <div style={{ fontSize: 12, color: "#666", marginTop: 4 }}>
+                  Last modified: {new Date(selectedProposal.lastModified || selectedProposal.createdDate).toLocaleString()}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <select
+                  value={selectedProposal.status}
+                  onChange={(e) => handleUpdateStatus(e.target.value)}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: 8,
+                    background: "rgba(255,255,255,0.05)",
+                    border: "1px solid rgba(255,255,255,0.1)",
+                    color: "#f0f0f0",
+                    fontSize: 13,
+                    cursor: "pointer"
+                  }}
+                >
+                  <option value="draft">Draft</option>
+                  <option value="sent">Sent</option>
+                  <option value="accepted">Accepted</option>
+                  <option value="declined">Declined</option>
+                </select>
+                <Btn variant="secondary" icon="trash" onClick={() => handleDeleteProposal(selectedProposal.id)} />
+              </div>
+            </div>
+
+            {/* Mode Toggle */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+              <button
+                onClick={() => setShowPreview(false)}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: !showPreview ? "#6366f1" : "rgba(255,255,255,0.05)",
+                  color: !showPreview ? "#fff" : "#888",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  transition: "all 0.15s"
+                }}
+              >
+                Edit
+              </button>
+              <button
+                onClick={() => setShowPreview(true)}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: showPreview ? "#10b981" : "rgba(255,255,255,0.05)",
+                  color: showPreview ? "#fff" : "#888",
+                  fontSize: 13,
+                  fontWeight: 500,
+                  cursor: "pointer",
+                  transition: "all 0.15s"
+                }}
+              >
+                Preview
+              </button>
+            </div>
+
+            {/* Content Area */}
+            {!showPreview ? (
+              <div>
+                <textarea
+                  value={editedContent}
+                  onChange={(e) => setEditedContent(e.target.value)}
+                  style={{
+                    width: "100%",
+                    minHeight: 500,
+                    padding: 16,
+                    borderRadius: 10,
+                    background: "rgba(255,255,255,0.03)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    color: "#f0f0f0",
+                    fontSize: 12,
+                    fontFamily: "'JetBrains Mono', monospace",
+                    resize: "vertical",
+                    outline: "none",
+                    lineHeight: 1.5
+                  }}
+                />
+                <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+                  <Btn onClick={handleSaveChanges} icon="check">Save Changes</Btn>
+                  <Btn variant="secondary" onClick={() => setEditedContent(selectedProposal.content)}>Revert</Btn>
+                </div>
+              </div>
+            ) : (
+              <div>
+                {/* PDF-like Preview */}
+                <div style={{
+                  background: "#fff",
+                  color: "#1f2937",
+                  padding: 48,
+                  borderRadius: 8,
+                  minHeight: 500,
+                  maxHeight: 600,
+                  overflowY: "auto",
+                  fontFamily: "'Inter', -apple-system, sans-serif",
+                  boxShadow: "0 4px 20px rgba(0,0,0,0.3)"
+                }}>
+                  {/* Header */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", paddingBottom: 20, borderBottom: `3px solid ${companySettings.accentColor}`, marginBottom: 24 }}>
+                    <div>
+                      <h1 style={{ fontSize: 24, fontWeight: 700, color: companySettings.accentColor, marginBottom: 4 }}>{companySettings.companyName}</h1>
+                      <p style={{ fontSize: 12, color: "#6b7280" }}>{companySettings.contactName}</p>
+                      <p style={{ fontSize: 12, color: "#6b7280" }}>{companySettings.email} | {companySettings.phone}</p>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <strong style={{ fontSize: 14 }}>PROPOSAL</strong>
+                      <p style={{ fontSize: 11, color: "#6b7280" }}>Date: {new Date().toLocaleDateString()}</p>
+                      <p style={{ fontSize: 11, color: "#6b7280" }}>Prepared for: {selectedProposal.client}</p>
+                    </div>
+                  </div>
+
+                  {/* Content */}
+                  <div style={{ whiteSpace: "pre-wrap", fontSize: 12, lineHeight: 1.7 }}>
+                    {editedContent}
+                  </div>
+                </div>
+
+                {/* Export Actions */}
+                <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+                  <Btn onClick={handleExportPDF} disabled={isExporting} icon="download">
+                    {isExporting ? "Preparing..." : "Export as PDF"}
+                  </Btn>
+                  <Btn
+                    variant="secondary"
+                    onClick={() => {
+                      navigator.clipboard.writeText(editedContent);
+                      alert("Proposal copied to clipboard!");
+                    }}
+                    icon="copy"
+                  >
+                    Copy Text
+                  </Btn>
+                </div>
+              </div>
+            )}
+
+            {/* Extracted Data Reference (if available) */}
+            {selectedProposal.extractedData && (
+              <div style={{ marginTop: 24, padding: 16, background: "rgba(99,102,241,0.06)", borderRadius: 10, border: "1px solid rgba(99,102,241,0.15)" }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#a5b4fc", marginBottom: 12 }}>Original Extracted Data</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, fontSize: 12 }}>
+                  {selectedProposal.extractedData.organizationName && (
+                    <div><span style={{ color: "#666" }}>Organization:</span> <span style={{ color: "#f0f0f0" }}>{selectedProposal.extractedData.organizationName}</span></div>
+                  )}
+                  {selectedProposal.extractedData.audienceDescription && (
+                    <div><span style={{ color: "#666" }}>Audience:</span> <span style={{ color: "#f0f0f0" }}>{selectedProposal.extractedData.audienceDescription}</span></div>
+                  )}
+                  {selectedProposal.extractedData.duration && (
+                    <div><span style={{ color: "#666" }}>Duration:</span> <span style={{ color: "#f0f0f0" }}>{selectedProposal.extractedData.duration}</span></div>
+                  )}
+                  {selectedProposal.extractedData.sessionFormat && (
+                    <div><span style={{ color: "#666" }}>Sessions:</span> <span style={{ color: "#f0f0f0" }}>{selectedProposal.extractedData.sessionFormat}</span></div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Empty state when no proposal selected */}
+        {!selectedProposal && proposals.length > 0 && (
+          <div style={{ background: "#1a1d23", borderRadius: 14, padding: 48, border: "1px solid rgba(255,255,255,0.05)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center" }}>
+            <Icon name="document" size={64} />
+            <h3 style={{ fontSize: 18, fontWeight: 600, color: "#f0f0f0", marginTop: 24 }}>Select a Proposal</h3>
+            <p style={{ color: "#888", fontSize: 14, marginTop: 8 }}>Choose a proposal from the list to edit, preview, or export</p>
+          </div>
+        )}
+      </div>
     </div>
   );
 };
@@ -4713,6 +5347,7 @@ const Payments = ({ invoices, transactions }) => {
 const NAV_ITEMS = [
   { id: "dashboard", label: "Dashboard", icon: "dashboard" },
   { id: "aiagent", label: "AI Agent", icon: "ai" },
+  { id: "proposals", label: "Proposals", icon: "document" },
   { id: "upcoming", label: "Upcoming Gigs", icon: "star" },
   { id: "tax", label: "S Corp Tax", icon: "tax" },
   { id: "banking", label: "Banking", icon: "bank" },
@@ -4737,6 +5372,7 @@ export default function App() {
     inquiries, setInquiries,
     contracts, setContracts,
     events, setEvents,
+    proposals, setProposals,
     expenses, setExpenses,
     creditCards, setCreditCards,
     bankAccounts, setBankAccounts,
@@ -4804,10 +5440,16 @@ export default function App() {
     setActiveView("contracts");
   };
 
+  const handleSendToProposals = (proposal) => {
+    setProposals(prev => [proposal, ...prev]);
+    setActiveView("proposals");
+  };
+
   const renderView = () => {
     switch (activeView) {
       case "dashboard": return <Dashboard transactions={transactions} invoices={invoices} inquiries={inquiries} events={events} />;
-      case "aiagent": return <AIAgent inquiries={inquiries} setInquiries={setInquiries} />;
+      case "aiagent": return <AIAgent inquiries={inquiries} setInquiries={setInquiries} onSendToProposals={handleSendToProposals} />;
+      case "proposals": return <ProposalEditor proposals={proposals} setProposals={setProposals} />;
       case "upcoming": return <UpcomingGigs events={events} contracts={contracts} invoices={invoices} />;
       case "tax": return <TaxManagement transactions={transactions} />;
       case "banking": return <Banking transactions={transactions} setTransactions={setTransactions} bankAccounts={bankAccounts} setBankAccounts={setBankAccounts} expenseCategories={expenseCategories} />;

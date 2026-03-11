@@ -107,6 +107,7 @@ export function useSuiteGigData() {
     inquiries: [],
     contracts: [],
     events: [],
+    proposals: [],
     expenses: [],
     creditCards: [],
     bankAccounts: [],
@@ -130,6 +131,7 @@ export function useSuiteGigData() {
           inquiries,
           contracts,
           events,
+          proposals,
           expenses,
           creditCards,
           bankAccounts,
@@ -142,6 +144,7 @@ export function useSuiteGigData() {
           dataService.getInquiries(),
           dataService.getContracts(),
           dataService.getEvents(),
+          dataService.getProposals(),
           dataService.getExpenses(),
           dataService.getCreditCards(),
           dataService.getBankAccounts(),
@@ -157,6 +160,7 @@ export function useSuiteGigData() {
             inquiries,
             contracts,
             events,
+            proposals,
             expenses,
             creditCards,
             bankAccounts,
@@ -208,6 +212,12 @@ export function useSuiteGigData() {
     await dataService.saveEvents(newVal);
   }, []);
 
+  const setProposals = useCallback(async (val) => {
+    const newVal = typeof val === 'function' ? val(dataRef.current.proposals) : val;
+    setData(prev => ({ ...prev, proposals: newVal }));
+    await dataService.saveProposals(newVal);
+  }, []);
+
   const setExpenses = useCallback(async (val) => {
     const newVal = typeof val === 'function' ? val(dataRef.current.expenses) : val;
     setData(prev => ({ ...prev, expenses: newVal }));
@@ -253,6 +263,7 @@ export function useSuiteGigData() {
     setInquiries,
     setContracts,
     setEvents,
+    setProposals,
     setExpenses,
     setCreditCards,
     setBankAccounts,
