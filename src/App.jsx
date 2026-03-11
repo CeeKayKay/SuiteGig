@@ -1013,6 +1013,7 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
   const [editCategory, setEditCategory] = useState("");
   const [editNotes, setEditNotes] = useState("");
   const [editReceipt, setEditReceipt] = useState(null);
+  const [editRecurring, setEditRecurring] = useState("none"); // "none" | "monthly" | "yearly"
   const [applyToAll, setApplyToAll] = useState(false);
   const [showConnectModal, setShowConnectModal] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -1081,8 +1082,75 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
   const currentMonth = new Date().toISOString().slice(0, 7);
   const thisMonth = expenses.filter(e => e.date.startsWith(currentMonth));
   const monthTotal = thisMonth.reduce((s, e) => s + e.amount, 0);
-  const recurringExpenses = expenses.filter(e => e.recurring);
-  const recurringTotal = recurringExpenses.reduce((s, e) => s + e.amount, 0);
+  const confirmedRecurring = expenses.filter(e => e.recurring && e.recurring !== "none" && e.recurring !== false);
+  const recurringExpenses = confirmedRecurring; // Alias for compatibility
+  const recurringTotal = confirmedRecurring.reduce((s, e) => s + (e.recurring === "yearly" ? e.amount / 12 : e.amount), 0);
+
+  // Detect potential recurring expenses automatically
+  const detectRecurring = useMemo(() => {
+    const groups = {};
+    expenses.forEach(exp => {
+      // Normalize merchant name for grouping
+      const key = normalizeMerchant(exp.merchant);
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(exp);
+    });
+
+    const detected = [];
+    Object.entries(groups).forEach(([merchantKey, items]) => {
+      if (items.length < 2) return; // Need at least 2 occurrences
+
+      // Group by similar amounts (within 5% tolerance)
+      const amountGroups = {};
+      items.forEach(item => {
+        const roundedAmount = Math.round(item.amount);
+        const matchingKey = Object.keys(amountGroups).find(k => {
+          const diff = Math.abs(parseFloat(k) - item.amount);
+          return diff / item.amount < 0.05; // 5% tolerance
+        });
+        const key = matchingKey || String(roundedAmount);
+        if (!amountGroups[key]) amountGroups[key] = [];
+        amountGroups[key].push(item);
+      });
+
+      Object.entries(amountGroups).forEach(([amtKey, amtItems]) => {
+        if (amtItems.length < 2) return;
+
+        // Sort by date to analyze frequency
+        const sorted = [...amtItems].sort((a, b) => a.date.localeCompare(b.date));
+        const dates = sorted.map(e => new Date(e.date));
+
+        // Calculate average days between occurrences
+        let totalDays = 0;
+        for (let i = 1; i < dates.length; i++) {
+          totalDays += (dates[i] - dates[i-1]) / (1000 * 60 * 60 * 24);
+        }
+        const avgDays = totalDays / (dates.length - 1);
+
+        // Determine frequency: monthly (25-35 days) or yearly (340-400 days)
+        let frequency = null;
+        if (avgDays >= 25 && avgDays <= 40) frequency = "monthly";
+        else if (avgDays >= 340 && avgDays <= 400) frequency = "yearly";
+        else if (avgDays >= 80 && avgDays <= 100) frequency = "quarterly"; // ~90 days
+
+        if (frequency && sorted.some(e => !e.recurring || e.recurring === "none" || e.recurring === false)) {
+          const avgAmount = amtItems.reduce((s, e) => s + e.amount, 0) / amtItems.length;
+          detected.push({
+            merchantKey,
+            merchant: sorted[0].merchant,
+            items: sorted,
+            frequency,
+            avgAmount,
+            avgDays: Math.round(avgDays),
+            count: amtItems.length,
+            lastDate: sorted[sorted.length - 1].date,
+          });
+        }
+      });
+    });
+
+    return detected.sort((a, b) => b.avgAmount - a.avgAmount);
+  }, [expenses]);
   const needsReview = expenses.filter(e => e.status === "needs_review").length;
   const now = new Date();
   const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
@@ -1148,6 +1216,7 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
     setEditCategory(exp.category);
     setEditNotes(exp.notes || "");
     setEditReceipt(exp.receipt || null);
+    setEditRecurring(exp.recurring === true ? "monthly" : (exp.recurring || "none")); // Handle legacy boolean
     setApplyToAll(false);
   };
 
@@ -1175,9 +1244,22 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
   const saveExpenseDetail = () => {
     setExpenses(prev => prev.map(e => e.id === editingExpense.id ? {
       ...e, category: editCategory, notes: editNotes, receipt: editReceipt,
+      recurring: editRecurring === "none" ? false : editRecurring,
       status: editCategory !== "Unknown" ? "categorized" : "needs_review"
     } : e));
     setEditingExpense(null);
+  };
+
+  // Confirm detected recurring expenses
+  const confirmRecurring = (detected, frequency) => {
+    const ids = new Set(detected.items.map(e => e.id));
+    setExpenses(prev => prev.map(e => ids.has(e.id) ? { ...e, recurring: frequency } : e));
+  };
+
+  // Dismiss detected recurring (mark as non-recurring)
+  const dismissRecurring = (detected) => {
+    const ids = new Set(detected.items.map(e => e.id));
+    setExpenses(prev => prev.map(e => ids.has(e.id) ? { ...e, recurring: "dismissed" } : e));
   };
 
   const handleReceiptUpload = (e) => {
@@ -1836,7 +1918,11 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
               { key: "merchant", label: "Merchant", render: r => (
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <span>{r.merchant}</span>
-                  {r.recurring && <Badge color="#8b5cf6" style={{ fontSize: 9 }}>Recurring</Badge>}
+                  {r.recurring && r.recurring !== "none" && r.recurring !== "dismissed" && (
+                    <Badge color={r.recurring === "yearly" ? "#3b82f6" : "#8b5cf6"} style={{ fontSize: 9 }}>
+                      {r.recurring === "yearly" ? "Yearly" : "Monthly"}
+                    </Badge>
+                  )}
                 </div>
               )},
               { key: "category", label: "Category", render: r => (
@@ -2035,14 +2121,18 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
 
       {/* ─── Recurring ─── */}
       {subTab === "recurring" && (() => {
-        const recur = expenses.filter(e => e.recurring);
-        const monthlyTotal = recur.reduce((s, e) => s + e.amount, 0);
-        const annualProjection = monthlyTotal * 12;
+        const monthly = expenses.filter(e => e.recurring === "monthly" || e.recurring === true);
+        const yearly = expenses.filter(e => e.recurring === "yearly");
+        const monthlyTotal = monthly.reduce((s, e) => s + e.amount, 0) + yearly.reduce((s, e) => s + e.amount / 12, 0);
+        const annualProjection = monthly.reduce((s, e) => s + e.amount * 12, 0) + yearly.reduce((s, e) => s + e.amount, 0);
+        const allRecur = [...monthly, ...yearly];
+        const pendingDetected = detectRecurring.filter(d => d.items.every(e => !e.recurring || e.recurring === "none" || e.recurring === false));
+
         return (
           <div>
             <div style={{ display: "flex", gap: 16, marginBottom: 24 }}>
               <div style={{ flex: 1, background: "#1a1d23", borderRadius: 14, padding: "20px 24px", border: "1px solid rgba(255,255,255,0.05)" }}>
-                <div style={{ fontSize: 12, color: "#888", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>Monthly Recurring</div>
+                <div style={{ fontSize: 12, color: "#888", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>Monthly Cost</div>
                 <div style={{ fontSize: 28, fontWeight: 700, color: "#f0f0f0", fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(monthlyTotal)}</div>
               </div>
               <div style={{ flex: 1, background: "#1a1d23", borderRadius: 14, padding: "20px 24px", border: "1px solid rgba(255,255,255,0.05)" }}>
@@ -2051,32 +2141,93 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
               </div>
               <div style={{ flex: 1, background: "#1a1d23", borderRadius: 14, padding: "20px 24px", border: "1px solid rgba(255,255,255,0.05)" }}>
                 <div style={{ fontSize: 12, color: "#888", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>Active Subscriptions</div>
-                <div style={{ fontSize: 28, fontWeight: 700, color: "#8b5cf6", fontFamily: "'JetBrains Mono', monospace" }}>{recur.length}</div>
+                <div style={{ fontSize: 28, fontWeight: 700, color: "#8b5cf6", fontFamily: "'JetBrains Mono', monospace" }}>{allRecur.length}</div>
               </div>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
-              {recur.map(exp => (
-                <div key={exp.id} style={{ background: "#1a1d23", borderRadius: 12, padding: 20, border: "1px solid rgba(255,255,255,0.05)" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
-                    <div>
-                      <div style={{ fontSize: 15, fontWeight: 600, color: "#f0f0f0" }}>{exp.merchant}</div>
-                      <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{exp.notes || exp.category}</div>
+            {/* Detected Recurring - needs confirmation */}
+            {pendingDetected.length > 0 && (
+              <div style={{ marginBottom: 24 }}>
+                <h3 style={{ fontSize: 14, color: "#f59e0b", marginBottom: 12, display: "flex", alignItems: "center", gap: 8 }}>
+                  <Icon name="alert" size={16} /> Detected Recurring ({pendingDetected.length})
+                </h3>
+                <p style={{ fontSize: 12, color: "#888", marginBottom: 16 }}>These expenses appear to be recurring based on similar amounts and frequency. Confirm to track them.</p>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 12 }}>
+                  {pendingDetected.map((d, i) => (
+                    <div key={i} style={{ background: "rgba(245,158,11,0.06)", borderRadius: 12, padding: 16, border: "1px solid rgba(245,158,11,0.15)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                        <div>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: "#f0f0f0" }}>{d.merchant}</div>
+                          <div style={{ fontSize: 11, color: "#888", marginTop: 2 }}>
+                            {d.count} occurrences · ~{d.avgDays} days apart · Last: {formatDate(d.lastDate)}
+                          </div>
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <div style={{ fontSize: 16, fontWeight: 700, color: "#f0f0f0", fontFamily: "'JetBrains Mono', monospace" }}>
+                            {formatCurrency(d.avgAmount)}
+                          </div>
+                          <Badge color={d.frequency === "monthly" ? "#8b5cf6" : d.frequency === "yearly" ? "#3b82f6" : "#10b981"} style={{ fontSize: 9, marginTop: 4 }}>
+                            {d.frequency}
+                          </Badge>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                        <Btn size="sm" onClick={() => confirmRecurring(d, d.frequency)}>
+                          Confirm as {d.frequency}
+                        </Btn>
+                        {d.frequency !== "monthly" && (
+                          <Btn size="sm" variant="secondary" onClick={() => confirmRecurring(d, "monthly")}>Monthly</Btn>
+                        )}
+                        {d.frequency !== "yearly" && (
+                          <Btn size="sm" variant="secondary" onClick={() => confirmRecurring(d, "yearly")}>Yearly</Btn>
+                        )}
+                        <Btn size="sm" variant="ghost" onClick={() => dismissRecurring(d)}>Dismiss</Btn>
+                      </div>
                     </div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: "#f0f0f0", fontFamily: "'JetBrains Mono', monospace" }}>
-                      {formatCurrency(exp.amount)}
-                    </div>
-                  </div>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <Badge color={categoryColors[exp.category] || "#888"}>{exp.category}</Badge>
-                    <span style={{ fontSize: 11, color: "#666", fontFamily: "'JetBrains Mono', monospace" }}>****{exp.cardLast4}</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: "#666", marginTop: 8 }}>
-                    Annual: {formatCurrency(exp.amount * 12)}
-                  </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            )}
+
+            {/* Confirmed Recurring */}
+            {allRecur.length > 0 && (
+              <>
+                <h3 style={{ fontSize: 14, color: "#8b5cf6", marginBottom: 12 }}>Confirmed Subscriptions ({allRecur.length})</h3>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 16 }}>
+                  {allRecur.map(exp => (
+                    <div key={exp.id} style={{ background: "#1a1d23", borderRadius: 12, padding: 20, border: "1px solid rgba(255,255,255,0.05)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                        <div>
+                          <div style={{ fontSize: 15, fontWeight: 600, color: "#f0f0f0" }}>{exp.merchant}</div>
+                          <div style={{ fontSize: 12, color: "#888", marginTop: 2 }}>{exp.notes || exp.category}</div>
+                        </div>
+                        <div style={{ textAlign: "right" }}>
+                          <div style={{ fontSize: 18, fontWeight: 700, color: "#f0f0f0", fontFamily: "'JetBrains Mono', monospace" }}>
+                            {formatCurrency(exp.amount)}
+                          </div>
+                          <Badge color={exp.recurring === "yearly" ? "#3b82f6" : "#8b5cf6"} style={{ fontSize: 9, marginTop: 4 }}>
+                            {exp.recurring === "yearly" ? "yearly" : "monthly"}
+                          </Badge>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <Badge color={categoryColors[exp.category] || "#888"}>{exp.category}</Badge>
+                        <span style={{ fontSize: 11, color: "#666", fontFamily: "'JetBrains Mono', monospace" }}>****{exp.cardLast4}</span>
+                      </div>
+                      <div style={{ fontSize: 11, color: "#666", marginTop: 8 }}>
+                        {exp.recurring === "yearly" ? `Monthly: ${formatCurrency(exp.amount / 12)}` : `Annual: ${formatCurrency(exp.amount * 12)}`}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {allRecur.length === 0 && pendingDetected.length === 0 && (
+              <div style={{ textAlign: "center", padding: 40, color: "#666" }}>
+                No recurring expenses detected yet. Add more expenses to see patterns.
+              </div>
+            )}
           </div>
         );
       })()}
@@ -2093,7 +2244,11 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
               <div style={{ display: "flex", gap: 12, fontSize: 12, color: "#888" }}>
                 <span>{formatDate(editingExpense.date)}</span>
                 <span>{editingExpense.cardLast4 === "manual" ? "Manual Entry" : `****${editingExpense.cardLast4}`}</span>
-                {editingExpense.recurring && <Badge color="#8b5cf6" style={{ fontSize: 9 }}>Recurring</Badge>}
+                {editingExpense.recurring && editingExpense.recurring !== "none" && editingExpense.recurring !== "dismissed" && (
+                  <Badge color={editingExpense.recurring === "yearly" ? "#3b82f6" : "#8b5cf6"} style={{ fontSize: 9 }}>
+                    {editingExpense.recurring === "yearly" ? "Yearly" : "Monthly"}
+                  </Badge>
+                )}
               </div>
             </div>
 
@@ -2120,6 +2275,13 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
                 </label>
               );
             })()}
+
+            <Select label="Recurring" value={editRecurring} onChange={setEditRecurring}
+              options={[
+                { value: "none", label: "Not Recurring" },
+                { value: "monthly", label: "Monthly Subscription" },
+                { value: "yearly", label: "Yearly Subscription" },
+              ]} />
 
             <TextArea label="Notes" value={editNotes} onChange={setEditNotes} rows={3} placeholder="Add notes about this expense..." />
 
@@ -2225,13 +2387,13 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
           options={[...expenseCategories.map(c => ({ value: c, label: c })), { value: "__add_custom__", label: "+ Add Custom Category" }]} />
         <Select label="Card" value={newCard} onChange={setNewCard}
           options={[{ value: "", label: "Manual (no card)" }, ...creditCards.map(c => ({ value: c.last4, label: `${c.brand} (****${c.last4})` }))]} />
-        <div style={{ marginBottom: 14 }}>
-          <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-            <input type="checkbox" checked={newRecurring} onChange={e => setNewRecurring(e.target.checked)}
-              style={{ width: 16, height: 16, accentColor: "#6366f1" }} />
-            <span style={{ fontSize: 13, color: "#ccc" }}>This is a recurring expense (subscription)</span>
-          </label>
-        </div>
+        <Select label="Recurring" value={newRecurring ? (newRecurring === true ? "monthly" : newRecurring) : "none"}
+          onChange={v => setNewRecurring(v === "none" ? false : v)}
+          options={[
+            { value: "none", label: "Not Recurring" },
+            { value: "monthly", label: "Monthly Subscription" },
+            { value: "yearly", label: "Yearly Subscription" },
+          ]} />
         <TextArea label="Notes (optional)" value={newNotes} onChange={setNewNotes} rows={2} placeholder="Any additional details..." />
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
           <Btn variant="secondary" onClick={() => setShowAddModal(false)}>Cancel</Btn>
