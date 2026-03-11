@@ -53,10 +53,18 @@ const smartCategorize = (merchant, userRules = {}) => {
     .replace(/[^a-z0-9\s&]/g, " ")
     .trim();
 
-  // 1. Check user's learned rules first (exact match)
+  // Extract domain from merchant for domain-based matching
+  const merchantDomain = extractDomain(merchant);
+
+  // 1. Check user's learned rules first (exact match or domain match)
   for (const [key, cat] of Object.entries(userRules)) {
     const normKey = key.toLowerCase().trim().replace(/\*+/g, " ").replace(/[^a-z0-9\s&]/g, " ").trim();
     if (normalized === normKey || normalized.includes(normKey) || normKey.includes(normalized)) {
+      return { category: cat, confidence: "high", source: "learned" };
+    }
+    // Domain-based matching: if both have the same domain, it's a high-confidence match
+    const keyDomain = extractDomain(key);
+    if (merchantDomain && keyDomain && merchantDomain === keyDomain) {
       return { category: cat, confidence: "high", source: "learned" };
     }
   }
@@ -70,12 +78,20 @@ const smartCategorize = (merchant, userRules = {}) => {
     }
   }
 
-  // 3. Check user rules with fuzzy matching (partial)
+  // 3. Check user rules with fuzzy matching (partial word match or domain base match)
   for (const [key, cat] of Object.entries(userRules)) {
     const normKey = key.toLowerCase().trim().replace(/\*+/g, " ").replace(/[^a-z0-9\s&]/g, " ").trim();
     const words = normKey.split(" ").filter(w => w.length > 3);
     if (words.some(word => normalized.includes(word))) {
       return { category: cat, confidence: "low", source: "fuzzy" };
+    }
+    // Check if domain base from rule matches in merchant (for truncated names)
+    const keyDomain = extractDomain(key);
+    if (keyDomain) {
+      const domainBase = keyDomain.split('.')[0]; // e.g., "vanishingincmagic"
+      if (domainBase.length > 5 && normalized.includes(domainBase)) {
+        return { category: cat, confidence: "low", source: "fuzzy" };
+      }
     }
   }
 
@@ -359,6 +375,12 @@ const loadState = (key, fallback) => {
   } catch { return fallback; }
 };
 
+// Extract domain from merchant name if present (e.g., "VANISHINGINCMAGIC.COM VANISHINGINCM NY" -> "vanishingincmagic.com")
+const extractDomain = (name) => {
+  const match = name.toLowerCase().match(/([a-z0-9-]+\.(?:com|net|org|co|io|shop|store|biz|us|uk|ca))/);
+  return match ? match[1] : null;
+};
+
 // Normalize merchant name by stripping transaction-specific numbers/IDs
 const normalizeMerchant = (name) => {
   return name.toLowerCase().trim()
@@ -368,12 +390,34 @@ const normalizeMerchant = (name) => {
     .trim();
 };
 
-const merchantsMatch = (a, b) => normalizeMerchant(a) === normalizeMerchant(b);
+// Check if two merchants match (considering domains and fuzzy matching)
+const merchantsMatch = (a, b) => {
+  const normA = normalizeMerchant(a);
+  const normB = normalizeMerchant(b);
+
+  // Exact match after normalization
+  if (normA === normB) return true;
+
+  // Domain-based matching: if both have the same domain, consider them the same merchant
+  const domainA = extractDomain(a);
+  const domainB = extractDomain(b);
+  if (domainA && domainB && domainA === domainB) return true;
+
+  // Fuzzy match: if one domain matches significantly (for truncated names like "VANISHINGINCM")
+  if (domainA || domainB) {
+    const domain = domainA || domainB;
+    const domainBase = domain.split('.')[0]; // e.g., "vanishingincmagic" from "vanishingincmagic.com"
+    const other = domainA ? normB : normA;
+    // Check if the other name contains the domain base or vice versa
+    if (other.includes(domainBase) || domainBase.includes(other.split(' ')[0])) return true;
+  }
+
+  return false;
+};
 
 const findCategoryRule = (merchant, rules) => {
-  const norm = normalizeMerchant(merchant);
   for (const [key, cat] of Object.entries(rules)) {
-    if (normalizeMerchant(key) === norm) return cat;
+    if (merchantsMatch(merchant, key)) return cat;
   }
   return null;
 };
