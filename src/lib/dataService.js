@@ -120,21 +120,45 @@ class DataService {
   // ── GENERIC CRUD ──────────────────────────────────────────
 
   async getAll(table, localKey, fallback = []) {
+    // Always load localStorage first
+    const localData = loadLocal(localKey, fallback);
+
     if (!this.useSupabase) {
-      return loadLocal(localKey, fallback);
+      return localData;
     }
 
-    const { data, error } = await supabase
-      .from(table)
-      .select('*')
-      .order('created_at', { ascending: false });
+    try {
+      const { data, error } = await supabase
+        .from(table)
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error(`Error fetching ${table}:`, error);
-      return loadLocal(localKey, fallback); // Fallback to local
+      if (error) {
+        console.error(`Error fetching ${table}:`, error);
+        return localData; // Fallback to local
+      }
+
+      // If Supabase is empty but localStorage has data, use localStorage
+      if ((!data || data.length === 0) && localData.length > 0) {
+        console.log(`[DataService] ${table}: Supabase empty, using localStorage (${localData.length} items)`);
+        return localData;
+      }
+
+      // If both have data, merge them (Supabase takes precedence for same IDs)
+      if (data && data.length > 0 && localData.length > 0) {
+        const supabaseIds = new Set(data.map(d => d.id));
+        const localOnly = localData.filter(l => !supabaseIds.has(l.id));
+        if (localOnly.length > 0) {
+          console.log(`[DataService] ${table}: Merging ${localOnly.length} local-only items with Supabase`);
+          return [...data, ...localOnly];
+        }
+      }
+
+      return data || [];
+    } catch (err) {
+      console.error(`Error fetching ${table}:`, err);
+      return localData;
     }
-
-    return data || [];
   }
 
   async upsert(table, localKey, record) {
