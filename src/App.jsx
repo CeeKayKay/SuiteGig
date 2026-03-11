@@ -3784,6 +3784,9 @@ const ProposalEditor = ({ proposals, setProposals }) => {
   const [editedContent, setEditedContent] = useState("");
   const [showPreview, setShowPreview] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState(null); // null, "saved", "error"
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
 
   // Proposal template settings
   const [companySettings, setCompanySettings] = useState(() => {
@@ -3811,18 +3814,42 @@ const ProposalEditor = ({ proposals, setProposals }) => {
     setSelectedProposal(proposal);
     setEditedContent(proposal.content);
     setShowPreview(false);
+    setHasUnsavedChanges(false);
+    setSaveStatus(null);
+  };
+
+  // Track content changes
+  const handleContentChange = (newContent) => {
+    setEditedContent(newContent);
+    setHasUnsavedChanges(newContent !== selectedProposal?.content);
+    setSaveStatus(null);
   };
 
   // Save changes to proposal
-  const handleSaveChanges = () => {
+  const handleSaveChanges = async () => {
     if (!selectedProposal) return;
-    const updated = {
-      ...selectedProposal,
-      content: editedContent,
-      lastModified: new Date().toISOString()
-    };
-    setProposals(prev => prev.map(p => p.id === selectedProposal.id ? updated : p));
-    setSelectedProposal(updated);
+    setIsSaving(true);
+    setSaveStatus(null);
+
+    try {
+      const updated = {
+        ...selectedProposal,
+        content: editedContent,
+        lastModified: new Date().toISOString()
+      };
+      await setProposals(prev => prev.map(p => p.id === selectedProposal.id ? updated : p));
+      setSelectedProposal(updated);
+      setHasUnsavedChanges(false);
+      setSaveStatus("saved");
+
+      // Clear the saved status after 3 seconds
+      setTimeout(() => setSaveStatus(null), 3000);
+    } catch (error) {
+      console.error("Error saving proposal:", error);
+      setSaveStatus("error");
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Update proposal status
@@ -4273,27 +4300,136 @@ const ProposalEditor = ({ proposals, setProposals }) => {
             {/* Content Area */}
             {!showPreview ? (
               <div>
+                {/* Unsaved changes indicator */}
+                {hasUnsavedChanges && (
+                  <div style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 8,
+                    padding: "8px 12px",
+                    background: "rgba(245,158,11,0.1)",
+                    borderRadius: 8,
+                    marginBottom: 12,
+                    border: "1px solid rgba(245,158,11,0.2)"
+                  }}>
+                    <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#f59e0b" }} />
+                    <span style={{ fontSize: 12, color: "#f59e0b" }}>Unsaved changes</span>
+                  </div>
+                )}
+
                 <textarea
                   value={editedContent}
-                  onChange={(e) => setEditedContent(e.target.value)}
+                  onChange={(e) => handleContentChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    // Handle Tab key for indentation
+                    if (e.key === 'Tab') {
+                      e.preventDefault();
+                      const start = e.target.selectionStart;
+                      const end = e.target.selectionEnd;
+                      const newContent = editedContent.substring(0, start) + '  ' + editedContent.substring(end);
+                      handleContentChange(newContent);
+                      // Set cursor position after the tab
+                      setTimeout(() => {
+                        e.target.selectionStart = e.target.selectionEnd = start + 2;
+                      }, 0);
+                    }
+                    // Ctrl/Cmd + S to save
+                    if ((e.ctrlKey || e.metaKey) && e.key === 's') {
+                      e.preventDefault();
+                      handleSaveChanges();
+                    }
+                  }}
+                  placeholder="Edit your proposal content here...
+
+You can use:
+  • Bullet points with • or -
+  ✓ Checkmarks with ✓
+  - Section headers in ALL CAPS
+  - Indentation with Tab key
+
+Press Ctrl+S (Cmd+S on Mac) to save quickly."
                   style={{
                     width: "100%",
                     minHeight: 500,
                     padding: 16,
                     borderRadius: 10,
                     background: "rgba(255,255,255,0.03)",
-                    border: "1px solid rgba(255,255,255,0.08)",
+                    border: hasUnsavedChanges ? "1px solid rgba(245,158,11,0.3)" : "1px solid rgba(255,255,255,0.08)",
                     color: "#f0f0f0",
-                    fontSize: 12,
+                    fontSize: 13,
                     fontFamily: "'JetBrains Mono', monospace",
                     resize: "vertical",
                     outline: "none",
-                    lineHeight: 1.5
+                    lineHeight: 1.6,
+                    tabSize: 2
                   }}
                 />
-                <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-                  <Btn onClick={handleSaveChanges} icon="check">Save Changes</Btn>
-                  <Btn variant="secondary" onClick={() => setEditedContent(selectedProposal.content)}>Revert</Btn>
+
+                {/* Editing toolbar */}
+                <div style={{ display: "flex", gap: 4, marginTop: 8, marginBottom: 8 }}>
+                  <button
+                    onClick={() => {
+                      const textarea = document.querySelector('textarea[value]');
+                      const start = textarea?.selectionStart || editedContent.length;
+                      const newContent = editedContent.substring(0, start) + '  • ' + editedContent.substring(start);
+                      handleContentChange(newContent);
+                    }}
+                    style={{ padding: "4px 8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 4, color: "#888", fontSize: 11, cursor: "pointer" }}
+                    title="Insert bullet point"
+                  >
+                    • Bullet
+                  </button>
+                  <button
+                    onClick={() => {
+                      const start = editedContent.length;
+                      const newContent = editedContent + '\n  ✓ ';
+                      handleContentChange(newContent);
+                    }}
+                    style={{ padding: "4px 8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 4, color: "#888", fontSize: 11, cursor: "pointer" }}
+                    title="Insert checkmark"
+                  >
+                    ✓ Check
+                  </button>
+                  <button
+                    onClick={() => {
+                      const newContent = editedContent + '\n\n───────────────────────────────────────────────────────────────\n                     NEW SECTION\n───────────────────────────────────────────────────────────────\n\n';
+                      handleContentChange(newContent);
+                    }}
+                    style={{ padding: "4px 8px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 4, color: "#888", fontSize: 11, cursor: "pointer" }}
+                    title="Insert section header"
+                  >
+                    ═ Section
+                  </button>
+                </div>
+
+                <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
+                  <Btn
+                    onClick={handleSaveChanges}
+                    disabled={isSaving || !hasUnsavedChanges}
+                    icon={saveStatus === "saved" ? "check" : "check"}
+                    variant={saveStatus === "saved" ? "success" : undefined}
+                  >
+                    {isSaving ? "Saving..." : saveStatus === "saved" ? "Saved!" : "Save Changes"}
+                  </Btn>
+                  <Btn
+                    variant="secondary"
+                    onClick={() => {
+                      setEditedContent(selectedProposal.content);
+                      setHasUnsavedChanges(false);
+                      setSaveStatus(null);
+                    }}
+                    disabled={!hasUnsavedChanges}
+                  >
+                    Revert
+                  </Btn>
+                  {saveStatus === "saved" && (
+                    <span style={{ fontSize: 12, color: "#10b981", display: "flex", alignItems: "center", gap: 4 }}>
+                      <Icon name="check" size={14} /> Changes saved successfully
+                    </span>
+                  )}
+                  {saveStatus === "error" && (
+                    <span style={{ fontSize: 12, color: "#ef4444" }}>Error saving changes</span>
+                  )}
                 </div>
               </div>
             ) : (
