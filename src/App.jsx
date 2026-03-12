@@ -203,6 +203,13 @@ const Icon = ({ name, size = 18 }) => {
     mic: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 1a3 3 0 00-3 3v8a3 3 0 006 0V4a3 3 0 00-3-3z"/><path d="M19 10v2a7 7 0 01-14 0v-2M12 19v4m-4 0h8"/></svg>,
     stop: <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1.5"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>,
     sparkle: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/></svg>,
+    chevronLeft: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6"/></svg>,
+    chevronDown: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>,
+    link: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>,
+    send: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>,
+    copy: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>,
+    printer: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>,
+    mail: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>,
   };
   return icons[name] || null;
 };
@@ -3164,6 +3171,7 @@ const Invoicing = ({ invoices, setInvoices }) => {
   const [importPreview, setImportPreview] = useState([]);
   const [importError, setImportError] = useState("");
   const [selectedForImport, setSelectedForImport] = useState(new Set());
+  const [showActionsMenu, setShowActionsMenu] = useState(false);
   const importFileRef = useRef(null);
 
   // Parse FreshBooks CSV format
@@ -3490,45 +3498,314 @@ const Invoicing = ({ invoices, setInvoices }) => {
         </div>
       </Modal>
 
-      {/* View Invoice Modal */}
-      <Modal isOpen={selectedInv !== null} onClose={() => setSelectedInv(null)} title={selectedInv?.number || ""} width="650px">
-        {selectedInv && (
-          <div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
-              <div><span style={{ color: "#888", fontSize: 12 }}>Client:</span><div style={{ color: "#f0f0f0", fontSize: 14 }}>{selectedInv.client}</div></div>
-              <div><span style={{ color: "#888", fontSize: 12 }}>Email:</span><div style={{ color: "#f0f0f0", fontSize: 14 }}>{selectedInv.email}</div></div>
-              <div><span style={{ color: "#888", fontSize: 12 }}>Date:</span><div style={{ color: "#f0f0f0", fontSize: 14 }}>{formatDate(selectedInv.date)}</div></div>
-              <div><span style={{ color: "#888", fontSize: 12 }}>Due:</span><div style={{ color: "#f0f0f0", fontSize: 14 }}>{formatDate(selectedInv.dueDate)}</div></div>
-            </div>
-            <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 16 }}>
-              <thead><tr style={{ borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
-                <th style={{ textAlign: "left", padding: 8, fontSize: 12, color: "#888" }}>Description</th>
-                <th style={{ textAlign: "right", padding: 8, fontSize: 12, color: "#888" }}>Qty</th>
-                <th style={{ textAlign: "right", padding: 8, fontSize: 12, color: "#888" }}>Rate</th>
-                <th style={{ textAlign: "right", padding: 8, fontSize: 12, color: "#888" }}>Amount</th>
-              </tr></thead>
-              <tbody>
-                {selectedInv.items.map((it, i) => (
-                  <tr key={i} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                    <td style={{ padding: 8, color: "#ccc", fontSize: 13 }}>{it.desc}</td>
-                    <td style={{ padding: 8, textAlign: "right", color: "#ccc", fontSize: 13 }}>{it.qty}</td>
-                    <td style={{ padding: 8, textAlign: "right", color: "#ccc", fontSize: 13, fontFamily: "monospace" }}>{formatCurrency(it.rate)}</td>
-                    <td style={{ padding: 8, textAlign: "right", color: "#f0f0f0", fontSize: 13, fontFamily: "monospace", fontWeight: 600 }}>{formatCurrency(it.qty * it.rate)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div style={{ textAlign: "right", fontSize: 18, fontWeight: 700, color: "#f0f0f0", fontFamily: "monospace" }}>
-              Total: {formatCurrency(selectedInv.items.reduce((a, it) => a + it.qty * it.rate, 0))}
-            </div>
-            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
-              {selectedInv.status === "draft" && <Btn onClick={() => { setInvoices(prev => prev.map(inv => inv.id === selectedInv.id ? { ...inv, status: "sent" } : inv)); setSelectedInv(null); }}>Send Invoice</Btn>}
-              {selectedInv.status === "sent" && <Btn variant="success" onClick={() => { setInvoices(prev => prev.map(inv => inv.id === selectedInv.id ? { ...inv, status: "paid", paidDate: new Date().toISOString().split("T")[0] } : inv)); setSelectedInv(null); }}>Mark Paid</Btn>}
-              <Btn variant="secondary" icon="download">Export PDF</Btn>
+      {/* View Invoice - FreshBooks Style Full View */}
+      {selectedInv && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", zIndex: 1000, overflow: "auto" }}>
+          {/* Header Bar */}
+          <div style={{ background: "#1a1a2e", borderBottom: "1px solid rgba(255,255,255,0.08)", padding: "12px 24px", position: "sticky", top: 0, zIndex: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", maxWidth: 900, margin: "0 auto" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+                <button onClick={() => setSelectedInv(null)} style={{ background: "none", border: "none", color: "#6366f1", cursor: "pointer", display: "flex", alignItems: "center", gap: 4, fontFamily: "inherit", fontSize: 14 }}>
+                  <Icon name="chevronLeft" size={20} /> Back
+                </button>
+                <h2 style={{ fontSize: 20, fontWeight: 600, color: "#f0f0f0", margin: 0 }}>{selectedInv.number}</h2>
+                <Badge color={selectedInv.status === "paid" ? "#10b981" : selectedInv.status === "sent" ? "#f59e0b" : "#888"}>
+                  {selectedInv.status}
+                </Badge>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                {/* More Actions Dropdown */}
+                <div style={{ position: "relative" }}>
+                  <button
+                    onClick={() => setShowActionsMenu(!showActionsMenu)}
+                    style={{
+                      background: "rgba(255,255,255,0.06)",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      borderRadius: 8,
+                      padding: "8px 16px",
+                      color: "#f0f0f0",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      fontFamily: "inherit",
+                      fontSize: 14
+                    }}
+                  >
+                    More Actions <Icon name="chevronDown" size={16} />
+                  </button>
+                  {showActionsMenu && (
+                    <>
+                      <div onClick={() => setShowActionsMenu(false)} style={{ position: "fixed", inset: 0, zIndex: 100 }} />
+                      <div style={{
+                        position: "absolute",
+                        top: "calc(100% + 8px)",
+                        right: 0,
+                        background: "#1e1e2f",
+                        border: "1px solid rgba(255,255,255,0.1)",
+                        borderRadius: 12,
+                        padding: 8,
+                        minWidth: 200,
+                        zIndex: 101,
+                        boxShadow: "0 8px 32px rgba(0,0,0,0.4)"
+                      }}>
+                        <button onClick={() => {
+                          setInvoices(prev => prev.map(inv => inv.id === selectedInv.id ? { ...inv, status: "paid", paidDate: new Date().toISOString().split("T")[0] } : inv));
+                          setSelectedInv({ ...selectedInv, status: "paid", paidDate: new Date().toISOString().split("T")[0] });
+                          setShowActionsMenu(false);
+                        }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", padding: "10px 12px", color: "#f0f0f0", cursor: "pointer", borderRadius: 8, display: "flex", alignItems: "center", gap: 10, fontFamily: "inherit", fontSize: 14 }}
+                          onMouseEnter={e => e.target.style.background = "rgba(255,255,255,0.06)"}
+                          onMouseLeave={e => e.target.style.background = "none"}>
+                          <span style={{ color: "#10b981" }}><Icon name="dollar" size={16} /></span> Add Payment
+                        </button>
+                        <button onClick={() => { alert("Charge card feature coming soon"); setShowActionsMenu(false); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", padding: "10px 12px", color: "#f0f0f0", cursor: "pointer", borderRadius: 8, display: "flex", alignItems: "center", gap: 10, fontFamily: "inherit", fontSize: 14 }}
+                          onMouseEnter={e => e.target.style.background = "rgba(255,255,255,0.06)"}
+                          onMouseLeave={e => e.target.style.background = "none"}>
+                          <span style={{ color: "#8b5cf6" }}><Icon name="creditcard" size={16} /></span> Charge a Card
+                        </button>
+                        <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", margin: "8px 0" }} />
+                        <button onClick={() => { window.open(`mailto:${selectedInv.email}?subject=Invoice ${selectedInv.number}`); setShowActionsMenu(false); }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", padding: "10px 12px", color: "#f0f0f0", cursor: "pointer", borderRadius: 8, display: "flex", alignItems: "center", gap: 10, fontFamily: "inherit", fontSize: 14 }}
+                          onMouseEnter={e => e.target.style.background = "rgba(255,255,255,0.06)"}
+                          onMouseLeave={e => e.target.style.background = "none"}>
+                          <span style={{ color: "#6366f1" }}><Icon name="mail" size={16} /></span> Send by Email
+                        </button>
+                        <button onClick={() => {
+                          navigator.clipboard.writeText(`Invoice ${selectedInv.number} for ${selectedInv.client}`);
+                          alert("Link copied to clipboard!");
+                          setShowActionsMenu(false);
+                        }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", padding: "10px 12px", color: "#f0f0f0", cursor: "pointer", borderRadius: 8, display: "flex", alignItems: "center", gap: 10, fontFamily: "inherit", fontSize: 14 }}
+                          onMouseEnter={e => e.target.style.background = "rgba(255,255,255,0.06)"}
+                          onMouseLeave={e => e.target.style.background = "none"}>
+                          <span style={{ color: "#6366f1" }}><Icon name="link" size={16} /></span> Share via Link
+                        </button>
+                        <button onClick={() => {
+                          setInvoices(prev => prev.map(inv => inv.id === selectedInv.id ? { ...inv, status: "sent" } : inv));
+                          setSelectedInv({ ...selectedInv, status: "sent" });
+                          setShowActionsMenu(false);
+                        }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", padding: "10px 12px", color: "#f0f0f0", cursor: "pointer", borderRadius: 8, display: "flex", alignItems: "center", gap: 10, fontFamily: "inherit", fontSize: 14 }}
+                          onMouseEnter={e => e.target.style.background = "rgba(255,255,255,0.06)"}
+                          onMouseLeave={e => e.target.style.background = "none"}>
+                          <span style={{ color: "#f59e0b" }}><Icon name="send" size={16} /></span> Mark as Sent
+                        </button>
+                        <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", margin: "8px 0" }} />
+                        <button onClick={() => {
+                          const dupInv = {
+                            ...selectedInv,
+                            id: generateId(),
+                            number: `INV-${String(invoices.length + 1).padStart(3, "0")}`,
+                            status: "draft",
+                            date: new Date().toISOString().split("T")[0],
+                            paidDate: null
+                          };
+                          setInvoices(prev => [...prev, dupInv]);
+                          setSelectedInv(dupInv);
+                          setShowActionsMenu(false);
+                        }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", padding: "10px 12px", color: "#f0f0f0", cursor: "pointer", borderRadius: 8, display: "flex", alignItems: "center", gap: 10, fontFamily: "inherit", fontSize: 14 }}
+                          onMouseEnter={e => e.target.style.background = "rgba(255,255,255,0.06)"}
+                          onMouseLeave={e => e.target.style.background = "none"}>
+                          <span style={{ color: "#888" }}><Icon name="copy" size={16} /></span> Duplicate
+                        </button>
+                        <button onClick={() => {
+                          const inv = selectedInv;
+                          const total = inv.items.reduce((a, it) => a + it.qty * it.rate, 0);
+                          const printWin = window.open("", "_blank");
+                          printWin.document.write(`
+                            <html><head><title>Invoice ${inv.number}</title>
+                            <style>
+                              body { font-family: system-ui, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; }
+                              .header { display: flex; justify-content: space-between; margin-bottom: 40px; }
+                              .invoice-num { font-size: 28px; font-weight: bold; color: #6366f1; }
+                              .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
+                              .label { color: #666; font-size: 12px; text-transform: uppercase; }
+                              table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+                              th { text-align: left; padding: 12px; border-bottom: 2px solid #ddd; color: #666; font-size: 12px; text-transform: uppercase; }
+                              td { padding: 12px; border-bottom: 1px solid #eee; }
+                              .total-row { font-size: 20px; font-weight: bold; text-align: right; padding-top: 20px; }
+                            </style></head><body>
+                            <div class="header">
+                              <div class="invoice-num">${inv.number}</div>
+                              <div style="text-align: right;">
+                                <div class="label">Status</div>
+                                <div style="font-weight: 600; text-transform: capitalize;">${inv.status}</div>
+                              </div>
+                            </div>
+                            <div class="info-grid">
+                              <div><div class="label">Bill To</div><div style="font-size: 16px; font-weight: 500;">${inv.client}</div><div style="color: #666;">${inv.email || ''}</div></div>
+                              <div style="text-align: right;"><div class="label">Date Issued</div><div>${inv.date}</div><div class="label" style="margin-top: 10px;">Due Date</div><div>${inv.dueDate || 'N/A'}</div></div>
+                            </div>
+                            <table>
+                              <thead><tr><th>Description</th><th style="text-align: right;">Qty</th><th style="text-align: right;">Rate</th><th style="text-align: right;">Amount</th></tr></thead>
+                              <tbody>
+                                ${inv.items.map(it => `<tr><td>${it.desc}</td><td style="text-align: right;">${it.qty}</td><td style="text-align: right;">$${it.rate.toFixed(2)}</td><td style="text-align: right;">$${(it.qty * it.rate).toFixed(2)}</td></tr>`).join('')}
+                              </tbody>
+                            </table>
+                            <div class="total-row">Total: $${total.toFixed(2)}</div>
+                            </body></html>
+                          `);
+                          printWin.document.close();
+                          printWin.print();
+                          setShowActionsMenu(false);
+                        }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", padding: "10px 12px", color: "#f0f0f0", cursor: "pointer", borderRadius: 8, display: "flex", alignItems: "center", gap: 10, fontFamily: "inherit", fontSize: 14 }}
+                          onMouseEnter={e => e.target.style.background = "rgba(255,255,255,0.06)"}
+                          onMouseLeave={e => e.target.style.background = "none"}>
+                          <span style={{ color: "#888" }}><Icon name="printer" size={16} /></span> Print
+                        </button>
+                        <button onClick={() => {
+                          const inv = selectedInv;
+                          const total = inv.items.reduce((a, it) => a + it.qty * it.rate, 0);
+                          const printWin = window.open("", "_blank");
+                          printWin.document.write(`
+                            <html><head><title>Invoice ${inv.number}</title>
+                            <style>
+                              body { font-family: system-ui, sans-serif; padding: 40px; max-width: 800px; margin: 0 auto; }
+                              .header { display: flex; justify-content: space-between; margin-bottom: 40px; }
+                              .invoice-num { font-size: 28px; font-weight: bold; color: #6366f1; }
+                              .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 30px; }
+                              .label { color: #666; font-size: 12px; text-transform: uppercase; }
+                              table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+                              th { text-align: left; padding: 12px; border-bottom: 2px solid #ddd; color: #666; font-size: 12px; text-transform: uppercase; }
+                              td { padding: 12px; border-bottom: 1px solid #eee; }
+                              .total-row { font-size: 20px; font-weight: bold; text-align: right; padding-top: 20px; }
+                            </style></head><body>
+                            <div class="header">
+                              <div class="invoice-num">${inv.number}</div>
+                              <div style="text-align: right;">
+                                <div class="label">Status</div>
+                                <div style="font-weight: 600; text-transform: capitalize;">${inv.status}</div>
+                              </div>
+                            </div>
+                            <div class="info-grid">
+                              <div><div class="label">Bill To</div><div style="font-size: 16px; font-weight: 500;">${inv.client}</div><div style="color: #666;">${inv.email || ''}</div></div>
+                              <div style="text-align: right;"><div class="label">Date Issued</div><div>${inv.date}</div><div class="label" style="margin-top: 10px;">Due Date</div><div>${inv.dueDate || 'N/A'}</div></div>
+                            </div>
+                            <table>
+                              <thead><tr><th>Description</th><th style="text-align: right;">Qty</th><th style="text-align: right;">Rate</th><th style="text-align: right;">Amount</th></tr></thead>
+                              <tbody>
+                                ${inv.items.map(it => `<tr><td>${it.desc}</td><td style="text-align: right;">${it.qty}</td><td style="text-align: right;">$${it.rate.toFixed(2)}</td><td style="text-align: right;">$${(it.qty * it.rate).toFixed(2)}</td></tr>`).join('')}
+                              </tbody>
+                            </table>
+                            <div class="total-row">Total: $${total.toFixed(2)}</div>
+                            </body></html>
+                          `);
+                          printWin.document.close();
+                          setShowActionsMenu(false);
+                        }} style={{ width: "100%", textAlign: "left", background: "none", border: "none", padding: "10px 12px", color: "#f0f0f0", cursor: "pointer", borderRadius: 8, display: "flex", alignItems: "center", gap: 10, fontFamily: "inherit", fontSize: 14 }}
+                          onMouseEnter={e => e.target.style.background = "rgba(255,255,255,0.06)"}
+                          onMouseLeave={e => e.target.style.background = "none"}>
+                          <span style={{ color: "#888" }}><Icon name="download" size={16} /></span> Download PDF
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+                <Btn onClick={() => setSelectedInv(null)}>Close</Btn>
+              </div>
             </div>
           </div>
-        )}
-      </Modal>
+
+          {/* Status Bar */}
+          <div style={{
+            background: selectedInv.status === "paid" ? "rgba(16,185,129,0.15)" : selectedInv.status === "sent" ? "rgba(245,158,11,0.15)" : "rgba(136,136,136,0.15)",
+            borderBottom: `2px solid ${selectedInv.status === "paid" ? "#10b981" : selectedInv.status === "sent" ? "#f59e0b" : "#888"}`,
+            padding: "12px 24px"
+          }}>
+            <div style={{ maxWidth: 900, margin: "0 auto", display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{
+                fontWeight: 600,
+                color: selectedInv.status === "paid" ? "#10b981" : selectedInv.status === "sent" ? "#f59e0b" : "#888",
+                textTransform: "capitalize"
+              }}>
+                {selectedInv.status === "paid" ? "Paid in Full" : selectedInv.status === "sent" ? "Sent - Awaiting Payment" : "Draft"}
+              </span>
+              {selectedInv.paidDate && <span style={{ color: "#888", fontSize: 13 }}>Payment received on {formatDate(selectedInv.paidDate)}</span>}
+            </div>
+          </div>
+
+          {/* Invoice Document */}
+          <div style={{ padding: "40px 24px", maxWidth: 900, margin: "0 auto" }}>
+            <div style={{
+              background: "#ffffff",
+              borderRadius: 12,
+              overflow: "hidden",
+              boxShadow: "0 8px 32px rgba(0,0,0,0.3)"
+            }}>
+              {/* Invoice Header */}
+              <div style={{ background: "#6366f1", padding: "32px 40px", color: "white" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <div>
+                    <div style={{ fontSize: 24, fontWeight: 700 }}>INVOICE</div>
+                    <div style={{ fontSize: 14, opacity: 0.9, marginTop: 4 }}>{selectedInv.number}</div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontSize: 14, opacity: 0.9 }}>Your Company Name</div>
+                    <div style={{ fontSize: 12, opacity: 0.7, marginTop: 4 }}>your@email.com</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Invoice Body */}
+              <div style={{ padding: "32px 40px", color: "#333" }}>
+                {/* Bill To & Invoice Details */}
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 40, marginBottom: 32 }}>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: "#6366f1", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Bill To</div>
+                    <div style={{ fontSize: 18, fontWeight: 600, color: "#1a1a2e" }}>{selectedInv.client}</div>
+                    {selectedInv.email && <div style={{ fontSize: 14, color: "#666", marginTop: 4 }}>{selectedInv.email}</div>}
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ marginBottom: 12 }}>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: "#6366f1", textTransform: "uppercase", letterSpacing: "0.05em" }}>Date Issued</div>
+                      <div style={{ fontSize: 15, color: "#333" }}>{formatDate(selectedInv.date)}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: "#6366f1", textTransform: "uppercase", letterSpacing: "0.05em" }}>Due Date</div>
+                      <div style={{ fontSize: 15, color: "#333" }}>{formatDate(selectedInv.dueDate) || "N/A"}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Line Items */}
+                <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 24 }}>
+                  <thead>
+                    <tr style={{ borderBottom: "2px solid #6366f1" }}>
+                      <th style={{ textAlign: "left", padding: "12px 0", fontSize: 11, fontWeight: 600, color: "#6366f1", textTransform: "uppercase", letterSpacing: "0.05em" }}>Description</th>
+                      <th style={{ textAlign: "right", padding: "12px 0", fontSize: 11, fontWeight: 600, color: "#6366f1", textTransform: "uppercase", letterSpacing: "0.05em", width: 80 }}>Qty</th>
+                      <th style={{ textAlign: "right", padding: "12px 0", fontSize: 11, fontWeight: 600, color: "#6366f1", textTransform: "uppercase", letterSpacing: "0.05em", width: 100 }}>Rate</th>
+                      <th style={{ textAlign: "right", padding: "12px 0", fontSize: 11, fontWeight: 600, color: "#6366f1", textTransform: "uppercase", letterSpacing: "0.05em", width: 100 }}>Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedInv.items.map((it, i) => (
+                      <tr key={i} style={{ borderBottom: "1px solid #eee" }}>
+                        <td style={{ padding: "14px 0", fontSize: 14, color: "#333" }}>{it.desc}</td>
+                        <td style={{ padding: "14px 0", textAlign: "right", fontSize: 14, color: "#666" }}>{it.qty}</td>
+                        <td style={{ padding: "14px 0", textAlign: "right", fontSize: 14, color: "#666", fontFamily: "monospace" }}>${it.rate.toFixed(2)}</td>
+                        <td style={{ padding: "14px 0", textAlign: "right", fontSize: 14, color: "#333", fontWeight: 600, fontFamily: "monospace" }}>${(it.qty * it.rate).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+
+                {/* Total */}
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  <div style={{ width: 250 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #eee" }}>
+                      <span style={{ color: "#666", fontSize: 14 }}>Subtotal</span>
+                      <span style={{ fontFamily: "monospace", fontSize: 14 }}>${selectedInv.items.reduce((a, it) => a + it.qty * it.rate, 0).toFixed(2)}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", background: "#f8f9fa", margin: "8px -12px -12px", padding: "16px 12px", borderRadius: "0 0 8px 8px" }}>
+                      <span style={{ fontWeight: 700, fontSize: 16, color: "#1a1a2e" }}>Amount Due (USD)</span>
+                      <span style={{ fontWeight: 700, fontSize: 18, color: "#6366f1", fontFamily: "monospace" }}>
+                        ${selectedInv.status === "paid" ? "0.00" : selectedInv.items.reduce((a, it) => a + it.qty * it.rate, 0).toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Import CSV Modal */}
       <Modal isOpen={showImportModal} onClose={() => { setShowImportModal(false); setImportPreview([]); setImportError(""); if (importFileRef.current) importFileRef.current.value = ''; }} title="Import Invoices from CSV" width="900px">
