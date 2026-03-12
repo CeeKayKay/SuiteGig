@@ -2889,14 +2889,14 @@ const AIAgent = ({ inquiries, setInquiries, onSendToProposals }) => {
 
   // Save input to localStorage whenever it changes
   useEffect(() => {
-    localStorage.setItem("sg_aiagent_input", inputText);
+    if (inputText) {
+      localStorage.setItem("sg_aiagent_input", inputText);
+    }
   }, [inputText]);
 
-  // Save archived input to localStorage
+  // Save archived input to localStorage (always save, even empty to clear)
   useEffect(() => {
-    if (archivedInput) {
-      localStorage.setItem("sg_aiagent_archived", archivedInput);
-    }
+    localStorage.setItem("sg_aiagent_archived", archivedInput);
   }, [archivedInput]);
 
   // Parse text to extract inquiry information
