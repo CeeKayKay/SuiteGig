@@ -4734,26 +4734,13 @@ const ProposalEditor = ({ proposals, setProposals }) => {
                         e.preventDefault();
                         handleSaveChanges();
                       }
-                      // Handle Enter key to insert proper line breaks
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        // Insert a <br> tag and move cursor after it
-                        const selection = window.getSelection();
-                        const range = selection.getRangeAt(0);
-                        const br = document.createElement('br');
-                        range.deleteContents();
-                        range.insertNode(br);
-                        // Insert a second br for spacing if at end of content
-                        const br2 = document.createElement('br');
-                        range.insertNode(br2);
-                        // Move cursor after the line break
-                        range.setStartAfter(br2);
-                        range.setEndAfter(br2);
-                        selection.removeAllRanges();
-                        selection.addRange(range);
-                        // Update ref
-                        editedContentRef.current = editorRef.current?.innerHTML || '';
-                        if (!hasUnsavedChanges) setHasUnsavedChanges(true);
+                      // Handle Enter key - let browser handle it but update our ref after
+                      if (e.key === 'Enter') {
+                        // Don't prevent default - let browser insert the line break naturally
+                        setTimeout(() => {
+                          editedContentRef.current = editorRef.current?.innerHTML || '';
+                          if (!hasUnsavedChanges) setHasUnsavedChanges(true);
+                        }, 0);
                       }
                     }}
                     onPaste={(e) => {
@@ -4774,7 +4761,9 @@ const ProposalEditor = ({ proposals, setProposals }) => {
                       fontSize: 14,
                       fontFamily: "'Inter', -apple-system, sans-serif",
                       outline: "none",
-                      lineHeight: 1.7
+                      lineHeight: 1.7,
+                      whiteSpace: "pre-wrap",
+                      wordWrap: "break-word"
                     }}
                     suppressContentEditableWarning={true}
                   />
