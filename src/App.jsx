@@ -3153,6 +3153,165 @@ const Invoicing = ({ invoices, setInvoices }) => {
   const [showNew, setShowNew] = useState(false);
   const [selectedInv, setSelectedInv] = useState(null);
   const [newInvoice, setNewInvoice] = useState({ client: "", email: "", items: [{ desc: "", qty: 1, rate: 0 }], dueDate: "" });
+  // CSV Import
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importedInvoices, setImportedInvoices] = useState([]);
+  const [importPreview, setImportPreview] = useState([]);
+  const [importError, setImportError] = useState("");
+  const [selectedForImport, setSelectedForImport] = useState(new Set());
+  const importFileRef = useRef(null);
+
+  // Parse FreshBooks CSV format
+  const parseInvoiceCSV = (csvText) => {
+    const lines = csvText.split('\n');
+    if (lines.length < 2) return [];
+
+    // Parse header
+    const header = [];
+    let inQuote = false;
+    let field = '';
+    for (const char of lines[0]) {
+      if (char === '"') {
+        inQuote = !inQuote;
+      } else if (char === ',' && !inQuote) {
+        header.push(field.trim());
+        field = '';
+      } else {
+        field += char;
+      }
+    }
+    header.push(field.trim());
+
+    // Parse rows (handling multi-line fields in quotes)
+    const rows = [];
+    let currentRow = [];
+    let currentField = '';
+    inQuote = false;
+
+    for (let i = 1; i < lines.length; i++) {
+      const line = lines[i];
+      for (let j = 0; j < line.length; j++) {
+        const char = line[j];
+        if (char === '"') {
+          inQuote = !inQuote;
+        } else if (char === ',' && !inQuote) {
+          currentRow.push(currentField.trim());
+          currentField = '';
+        } else {
+          currentField += char;
+        }
+      }
+
+      if (inQuote) {
+        // Multi-line field, add newline and continue
+        currentField += '\n';
+      } else {
+        // End of row
+        currentRow.push(currentField.trim());
+        currentField = '';
+        if (currentRow.length === header.length && currentRow.some(f => f)) {
+          const rowObj = {};
+          header.forEach((h, idx) => { rowObj[h] = currentRow[idx] || ''; });
+          rows.push(rowObj);
+        }
+        currentRow = [];
+      }
+    }
+
+    // Group by Invoice #
+    const invoiceMap = {};
+    rows.forEach(row => {
+      const invNum = row['Invoice #'];
+      if (!invNum) return;
+
+      if (!invoiceMap[invNum]) {
+        invoiceMap[invNum] = {
+          number: invNum,
+          client: row['Client Name'] || '',
+          date: row['Date Issued'] || '',
+          dueDate: row['Date Due'] || '',
+          status: (row['Invoice Status'] || 'draft').toLowerCase(),
+          paidDate: row['Date Paid'] || null,
+          items: []
+        };
+      }
+
+      // Add line item
+      const itemName = row['Item Name'] || '';
+      const itemDesc = row['Item Description'] || '';
+      const desc = itemDesc ? `${itemName}: ${itemDesc}`.replace(/\n/g, ' ') : itemName;
+      const rate = parseFloat(row['Rate']) || 0;
+      const qty = parseFloat(row['Quantity']) || 1;
+
+      invoiceMap[invNum].items.push({ desc, qty, rate });
+    });
+
+    // Convert to array and add IDs
+    return Object.values(invoiceMap).map(inv => ({
+      ...inv,
+      id: generateId(),
+      email: '', // Not in CSV
+      total: inv.items.reduce((sum, it) => sum + (it.qty * it.rate), 0)
+    }));
+  };
+
+  const handleImportFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const csvText = ev.target.result;
+        const parsed = parseInvoiceCSV(csvText);
+
+        if (parsed.length === 0) {
+          setImportError("No valid invoices found in the CSV file.");
+          setImportPreview([]);
+          return;
+        }
+
+        // Filter out invoices that already exist (by number)
+        const existingNumbers = new Set(invoices.map(inv => inv.number));
+        const newInvoices = parsed.filter(inv => !existingNumbers.has(inv.number));
+        const duplicates = parsed.length - newInvoices.length;
+
+        if (duplicates > 0) {
+          setImportError(`${duplicates} invoice(s) already exist and will be skipped.`);
+        } else {
+          setImportError("");
+        }
+
+        setImportPreview(newInvoices);
+        setSelectedForImport(new Set(newInvoices.map(inv => inv.number)));
+      } catch (err) {
+        setImportError(`Error parsing CSV: ${err.message}`);
+        setImportPreview([]);
+      }
+    };
+    reader.readAsText(file);
+  };
+
+  const toggleImportSelect = (invNum) => {
+    setSelectedForImport(prev => {
+      const next = new Set(prev);
+      if (next.has(invNum)) next.delete(invNum);
+      else next.add(invNum);
+      return next;
+    });
+  };
+
+  const importSelectedInvoices = () => {
+    const toImport = importPreview.filter(inv => selectedForImport.has(inv.number));
+    // Remove the 'total' field we added for preview, keep the rest
+    const cleaned = toImport.map(({ total, ...inv }) => inv);
+    setInvoices(prev => [...prev, ...cleaned]);
+    setShowImportModal(false);
+    setImportPreview([]);
+    setSelectedForImport(new Set());
+    setImportError("");
+    if (importFileRef.current) importFileRef.current.value = '';
+  };
 
   const nextNum = `INV-${String(invoices.length + 1).padStart(3, "0")}`;
 
@@ -3184,7 +3343,10 @@ const Invoicing = ({ invoices, setInvoices }) => {
           <h1 style={{ fontSize: 28, fontWeight: 700, color: "#f0f0f0", marginBottom: 4 }}>Invoicing</h1>
           <p style={{ color: "#888", fontSize: 14 }}>Create, track, and manage client invoices</p>
         </div>
-        <Btn icon="plus" onClick={() => setShowNew(true)}>New Invoice</Btn>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Btn variant="secondary" icon="download" onClick={() => setShowImportModal(true)}>Import CSV</Btn>
+          <Btn icon="plus" onClick={() => setShowNew(true)}>New Invoice</Btn>
+        </div>
       </div>
 
       <div style={{ display: "flex", gap: 16, marginBottom: 24 }}>
@@ -3278,6 +3440,113 @@ const Invoicing = ({ invoices, setInvoices }) => {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Import CSV Modal */}
+      <Modal isOpen={showImportModal} onClose={() => { setShowImportModal(false); setImportPreview([]); setImportError(""); if (importFileRef.current) importFileRef.current.value = ''; }} title="Import Invoices from CSV" width="900px">
+        <div>
+          <p style={{ color: "#888", fontSize: 13, marginBottom: 16 }}>
+            Import invoices from a FreshBooks CSV export. Invoices with multiple line items will be automatically grouped.
+          </p>
+
+          <div style={{ marginBottom: 20 }}>
+            <input ref={importFileRef} type="file" accept=".csv" onChange={handleImportFile}
+              style={{ display: "none" }} />
+            <Btn variant="secondary" icon="download" onClick={() => importFileRef.current?.click()}>
+              Select CSV File
+            </Btn>
+            {importFileRef.current?.files?.[0] && (
+              <span style={{ marginLeft: 12, fontSize: 13, color: "#888" }}>
+                {importFileRef.current.files[0].name}
+              </span>
+            )}
+          </div>
+
+          {importError && (
+            <div style={{ background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.3)", borderRadius: 8, padding: 12, marginBottom: 16, fontSize: 13, color: "#fca5a5" }}>
+              {importError}
+            </div>
+          )}
+
+          {importPreview.length > 0 && (
+            <>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <h4 style={{ fontSize: 14, fontWeight: 600, color: "#f0f0f0", margin: 0 }}>
+                  Preview ({selectedForImport.size} of {importPreview.length} selected)
+                </h4>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => setSelectedForImport(new Set(importPreview.map(inv => inv.number)))}
+                    style={{ padding: "4px 10px", borderRadius: 6, border: "none", background: "rgba(99,102,241,0.1)", color: "#818cf8", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>
+                    Select All
+                  </button>
+                  <button onClick={() => setSelectedForImport(new Set())}
+                    style={{ padding: "4px 10px", borderRadius: 6, border: "none", background: "rgba(255,255,255,0.04)", color: "#888", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>
+                    Deselect All
+                  </button>
+                </div>
+              </div>
+
+              <div style={{ maxHeight: 400, overflowY: "auto", border: "1px solid rgba(255,255,255,0.06)", borderRadius: 8 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ background: "rgba(255,255,255,0.03)", position: "sticky", top: 0 }}>
+                      <th style={{ padding: "10px 12px", textAlign: "left", fontSize: 11, color: "#888", textTransform: "uppercase", fontWeight: 600 }}></th>
+                      <th style={{ padding: "10px 12px", textAlign: "left", fontSize: 11, color: "#888", textTransform: "uppercase", fontWeight: 600 }}>Invoice #</th>
+                      <th style={{ padding: "10px 12px", textAlign: "left", fontSize: 11, color: "#888", textTransform: "uppercase", fontWeight: 600 }}>Client</th>
+                      <th style={{ padding: "10px 12px", textAlign: "left", fontSize: 11, color: "#888", textTransform: "uppercase", fontWeight: 600 }}>Date</th>
+                      <th style={{ padding: "10px 12px", textAlign: "left", fontSize: 11, color: "#888", textTransform: "uppercase", fontWeight: 600 }}>Due</th>
+                      <th style={{ padding: "10px 12px", textAlign: "left", fontSize: 11, color: "#888", textTransform: "uppercase", fontWeight: 600 }}>Items</th>
+                      <th style={{ padding: "10px 12px", textAlign: "right", fontSize: 11, color: "#888", textTransform: "uppercase", fontWeight: 600 }}>Total</th>
+                      <th style={{ padding: "10px 12px", textAlign: "left", fontSize: 11, color: "#888", textTransform: "uppercase", fontWeight: 600 }}>Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importPreview.map(inv => (
+                      <tr key={inv.number} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)", opacity: selectedForImport.has(inv.number) ? 1 : 0.4 }}>
+                        <td style={{ padding: "10px 12px" }}>
+                          <input type="checkbox" checked={selectedForImport.has(inv.number)} onChange={() => toggleImportSelect(inv.number)}
+                            style={{ accentColor: "#6366f1", cursor: "pointer" }} />
+                        </td>
+                        <td style={{ padding: "10px 12px", fontFamily: "monospace", color: "#6366f1", fontWeight: 600, fontSize: 13 }}>{inv.number}</td>
+                        <td style={{ padding: "10px 12px", fontSize: 13, color: "#f0f0f0" }}>{inv.client}</td>
+                        <td style={{ padding: "10px 12px", fontSize: 12, color: "#888" }}>{formatDate(inv.date)}</td>
+                        <td style={{ padding: "10px 12px", fontSize: 12, color: "#888" }}>{formatDate(inv.dueDate)}</td>
+                        <td style={{ padding: "10px 12px", fontSize: 12, color: "#888" }}>{inv.items.length} item{inv.items.length !== 1 ? 's' : ''}</td>
+                        <td style={{ padding: "10px 12px", textAlign: "right", fontFamily: "monospace", fontWeight: 600, color: "#f0f0f0", fontSize: 13 }}>
+                          {formatCurrency(inv.total)}
+                        </td>
+                        <td style={{ padding: "10px 12px" }}>
+                          <Badge color={inv.status === "paid" ? "#10b981" : inv.status === "sent" ? "#f59e0b" : inv.status === "partial" ? "#8b5cf6" : "#888"}>{inv.status}</Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 16, paddingTop: 16, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                <div style={{ fontSize: 14, color: "#888" }}>
+                  Total: <strong style={{ color: "#f0f0f0", fontFamily: "monospace" }}>
+                    {formatCurrency(importPreview.filter(inv => selectedForImport.has(inv.number)).reduce((sum, inv) => sum + inv.total, 0))}
+                  </strong>
+                  {" "}from {selectedForImport.size} invoice{selectedForImport.size !== 1 ? 's' : ''}
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <Btn variant="secondary" onClick={() => { setShowImportModal(false); setImportPreview([]); setImportError(""); if (importFileRef.current) importFileRef.current.value = ''; }}>Cancel</Btn>
+                  <Btn onClick={importSelectedInvoices} disabled={selectedForImport.size === 0}>
+                    Import {selectedForImport.size} Invoice{selectedForImport.size !== 1 ? 's' : ''}
+                  </Btn>
+                </div>
+              </div>
+            </>
+          )}
+
+          {importPreview.length === 0 && !importError && (
+            <div style={{ textAlign: "center", padding: 40, color: "#666" }}>
+              Select a CSV file to preview invoices for import.
+            </div>
+          )}
+        </div>
       </Modal>
     </div>
   );
