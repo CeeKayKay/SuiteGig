@@ -3172,7 +3172,58 @@ const Invoicing = ({ invoices, setInvoices }) => {
   const [importError, setImportError] = useState("");
   const [selectedForImport, setSelectedForImport] = useState(new Set());
   const [showActionsMenu, setShowActionsMenu] = useState(false);
+  const [isEditingInvoice, setIsEditingInvoice] = useState(false);
+  const [editingInvoice, setEditingInvoice] = useState(null);
   const importFileRef = useRef(null);
+
+  // Start editing invoice
+  const startEditInvoice = () => {
+    setEditingInvoice({ ...selectedInv, items: selectedInv.items.map(it => ({ ...it })) });
+    setIsEditingInvoice(true);
+  };
+
+  // Save edited invoice
+  const saveEditedInvoice = () => {
+    setInvoices(prev => prev.map(inv => inv.id === editingInvoice.id ? editingInvoice : inv));
+    setSelectedInv(editingInvoice);
+    setIsEditingInvoice(false);
+    setEditingInvoice(null);
+  };
+
+  // Cancel editing
+  const cancelEditInvoice = () => {
+    setIsEditingInvoice(false);
+    setEditingInvoice(null);
+  };
+
+  // Update editing invoice field
+  const updateEditField = (field, value) => {
+    setEditingInvoice(prev => ({ ...prev, [field]: value }));
+  };
+
+  // Update editing invoice line item
+  const updateEditItem = (index, field, value) => {
+    setEditingInvoice(prev => ({
+      ...prev,
+      items: prev.items.map((it, i) => i === index ? { ...it, [field]: value } : it)
+    }));
+  };
+
+  // Add line item while editing
+  const addEditItem = () => {
+    setEditingInvoice(prev => ({
+      ...prev,
+      items: [...prev.items, { desc: "", qty: 1, rate: 0 }]
+    }));
+  };
+
+  // Remove line item while editing
+  const removeEditItem = (index) => {
+    setEditingInvoice(prev => ({
+      ...prev,
+      items: prev.items.filter((_, i) => i !== index)
+    }));
+  };
 
   // Parse FreshBooks CSV format
   const parseInvoiceCSV = (csvText) => {
@@ -3698,7 +3749,17 @@ const Invoicing = ({ invoices, setInvoices }) => {
                     </>
                   )}
                 </div>
-                <Btn onClick={() => setSelectedInv(null)}>Close</Btn>
+                {isEditingInvoice ? (
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <Btn variant="secondary" onClick={cancelEditInvoice}>Cancel</Btn>
+                    <Btn onClick={saveEditedInvoice}>Save Changes</Btn>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <Btn variant="secondary" icon="edit" onClick={startEditInvoice}>Edit</Btn>
+                    <Btn onClick={() => setSelectedInv(null)}>Close</Btn>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -3749,17 +3810,54 @@ const Invoicing = ({ invoices, setInvoices }) => {
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 40, marginBottom: 32 }}>
                   <div>
                     <div style={{ fontSize: 11, fontWeight: 600, color: "#6366f1", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Bill To</div>
-                    <div style={{ fontSize: 18, fontWeight: 600, color: "#1a1a2e" }}>{selectedInv.client}</div>
-                    {selectedInv.email && <div style={{ fontSize: 14, color: "#666", marginTop: 4 }}>{selectedInv.email}</div>}
+                    {isEditingInvoice ? (
+                      <>
+                        <input
+                          value={editingInvoice.client}
+                          onChange={e => updateEditField("client", e.target.value)}
+                          placeholder="Client Name"
+                          style={{ fontSize: 18, fontWeight: 600, color: "#1a1a2e", border: "1px solid #ddd", borderRadius: 6, padding: "8px 12px", width: "100%", marginBottom: 8, fontFamily: "inherit" }}
+                        />
+                        <input
+                          value={editingInvoice.email || ""}
+                          onChange={e => updateEditField("email", e.target.value)}
+                          placeholder="Client Email"
+                          style={{ fontSize: 14, color: "#666", border: "1px solid #ddd", borderRadius: 6, padding: "6px 10px", width: "100%", fontFamily: "inherit" }}
+                        />
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ fontSize: 18, fontWeight: 600, color: "#1a1a2e" }}>{selectedInv.client}</div>
+                        {selectedInv.email && <div style={{ fontSize: 14, color: "#666", marginTop: 4 }}>{selectedInv.email}</div>}
+                      </>
+                    )}
                   </div>
                   <div style={{ textAlign: "right" }}>
                     <div style={{ marginBottom: 12 }}>
                       <div style={{ fontSize: 11, fontWeight: 600, color: "#6366f1", textTransform: "uppercase", letterSpacing: "0.05em" }}>Date Issued</div>
-                      <div style={{ fontSize: 15, color: "#333" }}>{formatDate(selectedInv.date)}</div>
+                      {isEditingInvoice ? (
+                        <input
+                          type="date"
+                          value={editingInvoice.date || ""}
+                          onChange={e => updateEditField("date", e.target.value)}
+                          style={{ fontSize: 15, color: "#333", border: "1px solid #ddd", borderRadius: 6, padding: "6px 10px", fontFamily: "inherit", textAlign: "right" }}
+                        />
+                      ) : (
+                        <div style={{ fontSize: 15, color: "#333" }}>{formatDate(selectedInv.date)}</div>
+                      )}
                     </div>
                     <div>
                       <div style={{ fontSize: 11, fontWeight: 600, color: "#6366f1", textTransform: "uppercase", letterSpacing: "0.05em" }}>Due Date</div>
-                      <div style={{ fontSize: 15, color: "#333" }}>{formatDate(selectedInv.dueDate) || "N/A"}</div>
+                      {isEditingInvoice ? (
+                        <input
+                          type="date"
+                          value={editingInvoice.dueDate || ""}
+                          onChange={e => updateEditField("dueDate", e.target.value)}
+                          style={{ fontSize: 15, color: "#333", border: "1px solid #ddd", borderRadius: 6, padding: "6px 10px", fontFamily: "inherit", textAlign: "right" }}
+                        />
+                      ) : (
+                        <div style={{ fontSize: 15, color: "#333" }}>{formatDate(selectedInv.dueDate) || "N/A"}</div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -3772,31 +3870,88 @@ const Invoicing = ({ invoices, setInvoices }) => {
                       <th style={{ textAlign: "right", padding: "12px 0", fontSize: 11, fontWeight: 600, color: "#6366f1", textTransform: "uppercase", letterSpacing: "0.05em", width: 80 }}>Qty</th>
                       <th style={{ textAlign: "right", padding: "12px 0", fontSize: 11, fontWeight: 600, color: "#6366f1", textTransform: "uppercase", letterSpacing: "0.05em", width: 100 }}>Rate</th>
                       <th style={{ textAlign: "right", padding: "12px 0", fontSize: 11, fontWeight: 600, color: "#6366f1", textTransform: "uppercase", letterSpacing: "0.05em", width: 100 }}>Amount</th>
+                      {isEditingInvoice && <th style={{ width: 40 }}></th>}
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedInv.items.map((it, i) => (
+                    {(isEditingInvoice ? editingInvoice.items : selectedInv.items).map((it, i) => (
                       <tr key={i} style={{ borderBottom: "1px solid #eee" }}>
-                        <td style={{ padding: "14px 0", fontSize: 14, color: "#333" }}>{it.desc}</td>
-                        <td style={{ padding: "14px 0", textAlign: "right", fontSize: 14, color: "#666" }}>{it.qty}</td>
-                        <td style={{ padding: "14px 0", textAlign: "right", fontSize: 14, color: "#666", fontFamily: "monospace" }}>${it.rate.toFixed(2)}</td>
-                        <td style={{ padding: "14px 0", textAlign: "right", fontSize: 14, color: "#333", fontWeight: 600, fontFamily: "monospace" }}>${(it.qty * it.rate).toFixed(2)}</td>
+                        {isEditingInvoice ? (
+                          <>
+                            <td style={{ padding: "8px 4px 8px 0" }}>
+                              <input
+                                value={it.desc}
+                                onChange={e => updateEditItem(i, "desc", e.target.value)}
+                                placeholder="Description"
+                                style={{ width: "100%", fontSize: 14, color: "#333", border: "1px solid #ddd", borderRadius: 6, padding: "8px 10px", fontFamily: "inherit" }}
+                              />
+                            </td>
+                            <td style={{ padding: "8px 4px" }}>
+                              <input
+                                type="number"
+                                value={it.qty}
+                                onChange={e => updateEditItem(i, "qty", Number(e.target.value))}
+                                style={{ width: "100%", textAlign: "right", fontSize: 14, color: "#666", border: "1px solid #ddd", borderRadius: 6, padding: "8px 10px", fontFamily: "inherit" }}
+                              />
+                            </td>
+                            <td style={{ padding: "8px 4px" }}>
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={it.rate}
+                                onChange={e => updateEditItem(i, "rate", Number(e.target.value))}
+                                style={{ width: "100%", textAlign: "right", fontSize: 14, color: "#666", border: "1px solid #ddd", borderRadius: 6, padding: "8px 10px", fontFamily: "monospace" }}
+                              />
+                            </td>
+                            <td style={{ padding: "8px 4px", textAlign: "right", fontSize: 14, color: "#333", fontWeight: 600, fontFamily: "monospace" }}>
+                              ${(it.qty * it.rate).toFixed(2)}
+                            </td>
+                            <td style={{ padding: "8px 0 8px 4px" }}>
+                              <button
+                                onClick={() => removeEditItem(i)}
+                                style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", padding: 4 }}
+                                title="Remove item"
+                              >
+                                <Icon name="x" size={16} />
+                              </button>
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td style={{ padding: "14px 0", fontSize: 14, color: "#333" }}>{it.desc}</td>
+                            <td style={{ padding: "14px 0", textAlign: "right", fontSize: 14, color: "#666" }}>{it.qty}</td>
+                            <td style={{ padding: "14px 0", textAlign: "right", fontSize: 14, color: "#666", fontFamily: "monospace" }}>${it.rate.toFixed(2)}</td>
+                            <td style={{ padding: "14px 0", textAlign: "right", fontSize: 14, color: "#333", fontWeight: 600, fontFamily: "monospace" }}>${(it.qty * it.rate).toFixed(2)}</td>
+                          </>
+                        )}
                       </tr>
                     ))}
                   </tbody>
                 </table>
+
+                {/* Add Item Button (edit mode only) */}
+                {isEditingInvoice && (
+                  <button
+                    onClick={addEditItem}
+                    style={{ background: "none", border: "1px dashed #6366f1", borderRadius: 8, padding: "10px 16px", color: "#6366f1", cursor: "pointer", fontSize: 14, fontFamily: "inherit", display: "flex", alignItems: "center", gap: 6, marginBottom: 24 }}
+                  >
+                    <Icon name="plus" size={16} /> Add Line Item
+                  </button>
+                )}
 
                 {/* Total */}
                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
                   <div style={{ width: 250 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #eee" }}>
                       <span style={{ color: "#666", fontSize: 14 }}>Subtotal</span>
-                      <span style={{ fontFamily: "monospace", fontSize: 14 }}>${selectedInv.items.reduce((a, it) => a + it.qty * it.rate, 0).toFixed(2)}</span>
+                      <span style={{ fontFamily: "monospace", fontSize: 14 }}>
+                        ${(isEditingInvoice ? editingInvoice : selectedInv).items.reduce((a, it) => a + it.qty * it.rate, 0).toFixed(2)}
+                      </span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", background: "#f8f9fa", margin: "8px -12px -12px", padding: "16px 12px", borderRadius: "0 0 8px 8px" }}>
                       <span style={{ fontWeight: 700, fontSize: 16, color: "#1a1a2e" }}>Amount Due (USD)</span>
                       <span style={{ fontWeight: 700, fontSize: 18, color: "#6366f1", fontFamily: "monospace" }}>
-                        ${selectedInv.status === "paid" ? "0.00" : selectedInv.items.reduce((a, it) => a + it.qty * it.rate, 0).toFixed(2)}
+                        ${(isEditingInvoice ? editingInvoice : selectedInv).status === "paid" ? "0.00" : (isEditingInvoice ? editingInvoice : selectedInv).items.reduce((a, it) => a + it.qty * it.rate, 0).toFixed(2)}
                       </span>
                     </div>
                   </div>
