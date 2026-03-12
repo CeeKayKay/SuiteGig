@@ -1084,6 +1084,14 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
   const [plaidAvailable, setPlaidAvailable] = useState(false);
   const [plaidStatus, setPlaidStatus] = useState("");
   const receiptInputRef = useRef(null);
+  // Report
+  const [reportStartDate, setReportStartDate] = useState(() => {
+    const d = new Date();
+    d.setMonth(d.getMonth() - 1);
+    return d.toISOString().split("T")[0];
+  });
+  const [reportEndDate, setReportEndDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const reportRef = useRef(null);
 
   // Plaid check on mount
   useEffect(() => {
@@ -1836,6 +1844,7 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
     { id: "cards", label: "Credit Cards", icon: "creditcard" },
     { id: "analysis", label: "Spending Analysis", icon: "piechart" },
     { id: "recurring", label: "Recurring", icon: "repeat" },
+    { id: "report", label: "Report", icon: "invoice" },
   ];
 
   const categoryColors = {
@@ -2260,6 +2269,273 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
             {allRecur.length === 0 && pendingDetected.length === 0 && (
               <div style={{ textAlign: "center", padding: 40, color: "#666" }}>
                 No recurring expenses detected yet. Add more expenses to see patterns.
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* ─── Report Tab ─── */}
+      {subTab === "report" && (() => {
+        // Filter expenses by date range
+        const reportExpenses = expenses.filter(e => {
+          if (!e.date) return false;
+          return e.date >= reportStartDate && e.date <= reportEndDate;
+        }).sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        // Calculate spending by category
+        const categoryTotals = reportExpenses.reduce((acc, e) => {
+          const cat = e.category || "Unknown";
+          acc[cat] = (acc[cat] || 0) + (e.amount || 0);
+          return acc;
+        }, {});
+
+        const sortedCategories = Object.entries(categoryTotals)
+          .sort((a, b) => b[1] - a[1]);
+
+        const totalSpending = reportExpenses.reduce((s, e) => s + (e.amount || 0), 0);
+
+        // Generate PDF
+        const generatePDF = () => {
+          const printWindow = window.open("", "_blank");
+          const startFormatted = new Date(reportStartDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+          const endFormatted = new Date(reportEndDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+
+          const categoryRows = sortedCategories.map(([cat, amount]) => `
+            <tr>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #eee;">${cat}</td>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #eee; text-align: right; font-family: monospace;">$${amount.toFixed(2)}</td>
+              <td style="padding: 8px 12px; border-bottom: 1px solid #eee; text-align: right;">${totalSpending > 0 ? ((amount / totalSpending) * 100).toFixed(1) : 0}%</td>
+            </tr>
+          `).join("");
+
+          const expenseRows = reportExpenses.map(e => `
+            <tr>
+              <td style="padding: 6px 10px; border-bottom: 1px solid #eee; font-size: 12px;">${new Date(e.date).toLocaleDateString()}</td>
+              <td style="padding: 6px 10px; border-bottom: 1px solid #eee; font-size: 12px;">${e.merchant || "Unknown"}</td>
+              <td style="padding: 6px 10px; border-bottom: 1px solid #eee; font-size: 12px;">${e.category || "Unknown"}</td>
+              <td style="padding: 6px 10px; border-bottom: 1px solid #eee; text-align: right; font-family: monospace; font-size: 12px;">$${(e.amount || 0).toFixed(2)}</td>
+            </tr>
+          `).join("");
+
+          printWindow.document.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+              <title>Expense Report - ${startFormatted} to ${endFormatted}</title>
+              <style>
+                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px; color: #333; max-width: 800px; margin: 0 auto; }
+                h1 { font-size: 24px; margin-bottom: 8px; }
+                .subtitle { color: #666; margin-bottom: 30px; }
+                .summary-box { background: #f8f9fa; border-radius: 8px; padding: 20px; margin-bottom: 30px; display: flex; gap: 40px; }
+                .summary-item { }
+                .summary-label { font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+                .summary-value { font-size: 28px; font-weight: 700; font-family: monospace; }
+                h2 { font-size: 18px; margin-top: 30px; margin-bottom: 15px; border-bottom: 2px solid #333; padding-bottom: 8px; }
+                table { width: 100%; border-collapse: collapse; }
+                th { text-align: left; padding: 10px 12px; background: #f0f0f0; font-weight: 600; font-size: 12px; text-transform: uppercase; }
+                th:last-child { text-align: right; }
+                .total-row td { font-weight: 700; border-top: 2px solid #333; background: #f8f9fa; }
+                @media print { body { padding: 20px; } }
+              </style>
+            </head>
+            <body>
+              <h1>Expense Report</h1>
+              <p class="subtitle">${startFormatted} - ${endFormatted}</p>
+
+              <div class="summary-box">
+                <div class="summary-item">
+                  <div class="summary-label">Total Spending</div>
+                  <div class="summary-value">$${totalSpending.toFixed(2)}</div>
+                </div>
+                <div class="summary-item">
+                  <div class="summary-label">Transactions</div>
+                  <div class="summary-value">${reportExpenses.length}</div>
+                </div>
+                <div class="summary-item">
+                  <div class="summary-label">Categories</div>
+                  <div class="summary-value">${sortedCategories.length}</div>
+                </div>
+              </div>
+
+              <h2>Spending by Category</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Category</th>
+                    <th style="text-align: right;">Amount</th>
+                    <th style="text-align: right;">% of Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${categoryRows}
+                  <tr class="total-row">
+                    <td style="padding: 10px 12px;">Total</td>
+                    <td style="padding: 10px 12px; text-align: right; font-family: monospace;">$${totalSpending.toFixed(2)}</td>
+                    <td style="padding: 10px 12px; text-align: right;">100%</td>
+                  </tr>
+                </tbody>
+              </table>
+
+              <h2>All Transactions (${reportExpenses.length})</h2>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Merchant</th>
+                    <th>Category</th>
+                    <th style="text-align: right;">Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${expenseRows}
+                </tbody>
+              </table>
+
+              <p style="margin-top: 40px; font-size: 11px; color: #999; text-align: center;">
+                Generated on ${new Date().toLocaleString()} by SuiteGig
+              </p>
+            </body>
+            </html>
+          `);
+          printWindow.document.close();
+          printWindow.onload = () => {
+            printWindow.print();
+          };
+        };
+
+        return (
+          <div ref={reportRef}>
+            {/* Date Range Picker */}
+            <div style={{ display: "flex", gap: 16, marginBottom: 24, alignItems: "flex-end", flexWrap: "wrap" }}>
+              <div>
+                <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>Start Date</label>
+                <input type="date" value={reportStartDate} onChange={e => setReportStartDate(e.target.value)}
+                  style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "10px 14px", color: "#f0f0f0", fontSize: 14, fontFamily: "inherit" }} />
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: 12, color: "#888", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.04em" }}>End Date</label>
+                <input type="date" value={reportEndDate} onChange={e => setReportEndDate(e.target.value)}
+                  style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 8, padding: "10px 14px", color: "#f0f0f0", fontSize: 14, fontFamily: "inherit" }} />
+              </div>
+              {/* Quick date presets */}
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={() => {
+                  const now = new Date();
+                  setReportStartDate(new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0]);
+                  setReportEndDate(now.toISOString().split("T")[0]);
+                }} style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: "rgba(255,255,255,0.06)", color: "#888", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>This Month</button>
+                <button onClick={() => {
+                  const now = new Date();
+                  const lastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                  const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
+                  setReportStartDate(lastMonth.toISOString().split("T")[0]);
+                  setReportEndDate(lastMonthEnd.toISOString().split("T")[0]);
+                }} style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: "rgba(255,255,255,0.06)", color: "#888", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Last Month</button>
+                <button onClick={() => {
+                  const now = new Date();
+                  const q = Math.floor(now.getMonth() / 3);
+                  setReportStartDate(new Date(now.getFullYear(), q * 3, 1).toISOString().split("T")[0]);
+                  setReportEndDate(now.toISOString().split("T")[0]);
+                }} style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: "rgba(255,255,255,0.06)", color: "#888", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>This Quarter</button>
+                <button onClick={() => {
+                  const now = new Date();
+                  setReportStartDate(new Date(now.getFullYear(), 0, 1).toISOString().split("T")[0]);
+                  setReportEndDate(now.toISOString().split("T")[0]);
+                }} style={{ padding: "8px 14px", borderRadius: 8, border: "none", background: "rgba(255,255,255,0.06)", color: "#888", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Year to Date</button>
+              </div>
+              <Btn icon="download" onClick={generatePDF} disabled={reportExpenses.length === 0}>Download PDF</Btn>
+            </div>
+
+            {/* Summary Stats */}
+            <div style={{ display: "flex", gap: 16, marginBottom: 24 }}>
+              <div style={{ flex: 1, background: "#1a1d23", borderRadius: 14, padding: "20px 24px", border: "1px solid rgba(255,255,255,0.05)" }}>
+                <div style={{ fontSize: 12, color: "#888", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>Total Spending</div>
+                <div style={{ fontSize: 28, fontWeight: 700, color: "#ef4444", fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(totalSpending)}</div>
+              </div>
+              <div style={{ flex: 1, background: "#1a1d23", borderRadius: 14, padding: "20px 24px", border: "1px solid rgba(255,255,255,0.05)" }}>
+                <div style={{ fontSize: 12, color: "#888", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>Transactions</div>
+                <div style={{ fontSize: 28, fontWeight: 700, color: "#6366f1", fontFamily: "'JetBrains Mono', monospace" }}>{reportExpenses.length}</div>
+              </div>
+              <div style={{ flex: 1, background: "#1a1d23", borderRadius: 14, padding: "20px 24px", border: "1px solid rgba(255,255,255,0.05)" }}>
+                <div style={{ fontSize: 12, color: "#888", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>Categories</div>
+                <div style={{ fontSize: 28, fontWeight: 700, color: "#10b981", fontFamily: "'JetBrains Mono', monospace" }}>{sortedCategories.length}</div>
+              </div>
+              <div style={{ flex: 1, background: "#1a1d23", borderRadius: 14, padding: "20px 24px", border: "1px solid rgba(255,255,255,0.05)" }}>
+                <div style={{ fontSize: 12, color: "#888", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.06em" }}>Daily Average</div>
+                <div style={{ fontSize: 28, fontWeight: 700, color: "#f59e0b", fontFamily: "'JetBrains Mono', monospace" }}>
+                  {formatCurrency(reportExpenses.length > 0 ? totalSpending / Math.max(1, Math.ceil((new Date(reportEndDate) - new Date(reportStartDate)) / (1000 * 60 * 60 * 24))) : 0)}
+                </div>
+              </div>
+            </div>
+
+            {/* Spending by Category */}
+            <div style={{ background: "#1a1d23", borderRadius: 14, padding: 24, border: "1px solid rgba(255,255,255,0.05)", marginBottom: 24 }}>
+              <h3 style={{ fontSize: 16, fontWeight: 600, color: "#f0f0f0", marginBottom: 20, display: "flex", alignItems: "center", gap: 8 }}>
+                <Icon name="piechart" size={18} /> Spending by Category
+              </h3>
+              {sortedCategories.length > 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                  {sortedCategories.map(([cat, amount]) => {
+                    const pct = totalSpending > 0 ? (amount / totalSpending) * 100 : 0;
+                    return (
+                      <div key={cat}>
+                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{ width: 12, height: 12, borderRadius: 3, background: categoryColors[cat] || "#888" }}></div>
+                            <span style={{ fontSize: 14, color: "#f0f0f0" }}>{cat}</span>
+                          </div>
+                          <div style={{ display: "flex", gap: 16, alignItems: "center" }}>
+                            <span style={{ fontSize: 14, fontWeight: 600, color: "#f0f0f0", fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(amount)}</span>
+                            <span style={{ fontSize: 12, color: "#888", width: 50, textAlign: "right" }}>{pct.toFixed(1)}%</span>
+                          </div>
+                        </div>
+                        <div style={{ height: 8, background: "rgba(255,255,255,0.06)", borderRadius: 4, overflow: "hidden" }}>
+                          <div style={{ height: "100%", width: `${pct}%`, background: categoryColors[cat] || "#888", borderRadius: 4, transition: "width 0.3s" }}></div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ textAlign: "center", padding: 20, color: "#666" }}>
+                  No expenses found in this date range.
+                </div>
+              )}
+            </div>
+
+            {/* Transaction List Preview */}
+            {reportExpenses.length > 0 && (
+              <div style={{ background: "#1a1d23", borderRadius: 14, padding: 24, border: "1px solid rgba(255,255,255,0.05)" }}>
+                <h3 style={{ fontSize: 16, fontWeight: 600, color: "#f0f0f0", marginBottom: 16, display: "flex", alignItems: "center", gap: 8 }}>
+                  <Icon name="receipt" size={18} /> Transactions ({reportExpenses.length})
+                </h3>
+                <div style={{ maxHeight: 400, overflowY: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                    <thead>
+                      <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.1)" }}>
+                        <th style={{ textAlign: "left", padding: "10px 12px", fontSize: 11, color: "#888", textTransform: "uppercase", fontWeight: 600 }}>Date</th>
+                        <th style={{ textAlign: "left", padding: "10px 12px", fontSize: 11, color: "#888", textTransform: "uppercase", fontWeight: 600 }}>Merchant</th>
+                        <th style={{ textAlign: "left", padding: "10px 12px", fontSize: 11, color: "#888", textTransform: "uppercase", fontWeight: 600 }}>Category</th>
+                        <th style={{ textAlign: "right", padding: "10px 12px", fontSize: 11, color: "#888", textTransform: "uppercase", fontWeight: 600 }}>Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reportExpenses.map(e => (
+                        <tr key={e.id} style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
+                          <td style={{ padding: "10px 12px", fontSize: 13, color: "#888" }}>{formatDate(e.date)}</td>
+                          <td style={{ padding: "10px 12px", fontSize: 13, color: "#f0f0f0" }}>{e.merchant || "Unknown"}</td>
+                          <td style={{ padding: "10px 12px" }}>
+                            <Badge color={categoryColors[e.category] || "#888"}>{e.category || "Unknown"}</Badge>
+                          </td>
+                          <td style={{ padding: "10px 12px", fontSize: 14, fontWeight: 600, color: "#ef4444", textAlign: "right", fontFamily: "'JetBrains Mono', monospace" }}>
+                            -{formatCurrency(e.amount)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )}
           </div>
