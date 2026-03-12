@@ -1949,7 +1949,9 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
                   title={selectedIds.size === filtered.length ? "Deselect all" : "Select all"}
                   style={{ width: 15, height: 15, accentColor: "#6366f1", cursor: "pointer" }} />
               ), render: r => (
-                <input type="checkbox" checked={selectedIds.has(r.id)} onChange={(e) => toggleSelect(r.id, e)}
+                <input type="checkbox" checked={selectedIds.has(r.id)}
+                  onChange={(e) => toggleSelect(r.id, e)}
+                  onClick={(e) => e.stopPropagation()}
                   style={{ width: 15, height: 15, accentColor: "#6366f1", cursor: "pointer" }} />
               )},
               { key: "date", label: "Date", render: r => formatDate(r.date) },
