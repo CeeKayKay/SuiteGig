@@ -156,7 +156,7 @@ const CHECKLIST_ANNUAL = [
 ];
 
 // ═══════════════════════════════════════════════════════
-// SAMPLE DATA GENERATORS
+// UUID GENERATOR
 // ═══════════════════════════════════════════════════════
 
 // Generate UUID-compatible IDs for Supabase compatibility
@@ -172,53 +172,6 @@ const generateId = () => {
     return v.toString(16);
   });
 };
-
-const sampleTransactions = [
-  { id: generateId(), date: "2026-02-01", description: "Adobe Creative Cloud", amount: -54.99, category: "Software & Tools", account: "Chase Business CC", reconciled: true },
-  { id: generateId(), date: "2026-02-02", description: "Office Depot", amount: -127.43, category: "Office Supplies", account: "Chase Business CC", reconciled: true },
-  { id: generateId(), date: "2026-02-03", description: "Client Payment - Acme Corp", amount: 3500.00, category: "Income", account: "Business Checking", reconciled: true },
-  { id: generateId(), date: "2026-02-04", description: "Unknown Charge #4821", amount: -89.00, category: "Unknown", account: "Chase Business CC", reconciled: false },
-  { id: generateId(), date: "2026-02-05", description: "Google Workspace", amount: -14.40, category: "Software & Tools", account: "Business Checking", reconciled: true },
-  { id: generateId(), date: "2026-01-28", description: "Uber - Client Meeting", amount: -34.56, category: "Travel", account: "Chase Business CC", reconciled: true },
-  { id: generateId(), date: "2026-01-25", description: "State Farm Insurance", amount: -289.00, category: "Insurance", account: "Business Checking", reconciled: true },
-  { id: generateId(), date: "2026-01-20", description: "Mystery payment XREF991", amount: -250.00, category: "Unknown", account: "Chase Business CC", reconciled: false },
-];
-
-const sampleCreditCards = [];
-
-const sampleExpenses = [];
-
-const sampleInquiries = [
-  { id: generateId(), name: "Johnson Wedding", contact: "Sarah Johnson", email: "sarah@email.com", phone: "555-0101", phase: "new", grade: "A", date: "2026-06-15", value: 8500, notes: "200 guests, outdoor venue", nextSteps: "Send portfolio and pricing guide" },
-  { id: generateId(), name: "Tech Summit 2026", contact: "Mike Chen", email: "mike@techsummit.com", phone: "555-0202", phase: "proposal", grade: "B", date: "2026-09-20", value: 15000, notes: "Corporate event, 500 attendees", nextSteps: "Follow up on proposal by Friday" },
-  { id: generateId(), name: "Garcia Birthday", contact: "Maria Garcia", email: "maria@email.com", phone: "555-0303", phase: "contacted", grade: "C", date: "2026-04-10", value: 2500, notes: "50th birthday, 75 guests", nextSteps: "Schedule venue walkthrough" },
-  { id: generateId(), name: "Annual Gala", contact: "Robert Kim", email: "robert@foundation.org", phone: "555-0404", phase: "negotiation", grade: "A", date: "2026-11-08", value: 25000, notes: "Charity gala, 300 guests, black tie", nextSteps: "Finalize catering contract terms" },
-];
-
-const sampleInvoices = [
-  { id: generateId(), number: "INV-001", client: "Acme Corp", email: "billing@acme.com", items: [{ desc: "Consulting Services - January", qty: 40, rate: 150 }], status: "paid", date: "2026-01-15", dueDate: "2026-02-15", paidDate: "2026-02-10" },
-  { id: generateId(), number: "INV-002", client: "TechStart Inc", email: "ap@techstart.com", items: [{ desc: "Event Planning - Q1", qty: 1, rate: 5000 }], status: "sent", date: "2026-02-01", dueDate: "2026-03-01", paidDate: null },
-  { id: generateId(), number: "INV-003", client: "Green Valley LLC", email: "pay@greenvalley.com", items: [{ desc: "Photography Package", qty: 1, rate: 2500 }, { desc: "Photo Editing", qty: 8, rate: 75 }], status: "draft", date: "2026-02-05", dueDate: "2026-03-05", paidDate: null },
-];
-
-const sampleEvents = [
-  { id: generateId(), name: "Annual Gala", client: "Robert Kim", date: "2026-03-08", time: "18:00", venue: "Grand Ballroom", guests: 300, value: 25000, email: "robert@foundation.org", tasks: [
-    { id: generateId(), text: "Confirm catering menu", done: true },
-    { id: generateId(), text: "Send final guest list to venue", done: false },
-    { id: generateId(), text: "Arrange audio/visual equipment", done: false },
-    { id: generateId(), text: "Prepare event timeline", done: false },
-  ], emails: [
-    { from: "robert@foundation.org", subject: "Gala Menu Preferences", date: "2026-02-01", snippet: "We'd like to go with Option B for the main course..." },
-    { from: "robert@foundation.org", subject: "RE: Guest Count Update", date: "2026-02-03", snippet: "Final count is 300 guests, including 20 VIPs..." },
-  ]},
-  { id: generateId(), name: "Garcia Birthday", client: "Maria Garcia", date: "2026-04-10", time: "14:00", venue: "Riverside Park Pavilion", guests: 75, value: 2500, email: "maria@email.com", tasks: [
-    { id: generateId(), text: "Order custom cake", done: false },
-    { id: generateId(), text: "Book DJ", done: true },
-    { id: generateId(), text: "Arrange balloon decorations", done: false },
-  ], emails: [
-    { from: "maria@email.com", subject: "Cake Design Ideas", date: "2026-02-04", snippet: "I was thinking of a three-tier gold and white theme..." },
-  ]},
-];
 
 // ═══════════════════════════════════════════════════════
 // ICON COMPONENTS
@@ -503,7 +456,7 @@ const loadExpenses = (fallback) => {
 // SECTION: DASHBOARD
 // ═══════════════════════════════════════════════════════
 
-const Dashboard = ({ transactions, invoices, inquiries, events }) => {
+const Dashboard = ({ transactions, invoices, inquiries, events, onClearDemoData }) => {
   const totalExpenses = transactions.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0);
   const totalIncome = transactions.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0);
   const unknownCount = transactions.filter(t => t.category === "Unknown").length;
@@ -514,9 +467,34 @@ const Dashboard = ({ transactions, invoices, inquiries, events }) => {
 
   return (
     <div>
-      <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 700, color: "#f0f0f0", marginBottom: 4 }}>Dashboard</h1>
-        <p style={{ color: "#888", fontSize: 14 }}>Business overview for {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}</p>
+      <div style={{ marginBottom: 32, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <h1 style={{ fontSize: 28, fontWeight: 700, color: "#f0f0f0", marginBottom: 4 }}>Dashboard</h1>
+          <p style={{ color: "#888", fontSize: 14 }}>Business overview for {new Date().toLocaleDateString("en-US", { month: "long", year: "numeric" })}</p>
+        </div>
+        {onClearDemoData && (
+          <button
+            onClick={() => {
+              if (window.confirm("This will clear ALL demo/sample data from the app. Your real data will remain if synced to Supabase. Continue?")) {
+                onClearDemoData();
+              }
+            }}
+            style={{
+              background: "rgba(239,68,68,0.1)",
+              border: "1px solid rgba(239,68,68,0.3)",
+              color: "#ef4444",
+              padding: "8px 16px",
+              borderRadius: 8,
+              fontSize: 12,
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: 6
+            }}
+          >
+            <Icon name="trash" size={14} /> Clear Demo Data
+          </button>
+        )}
       </div>
 
       <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 32 }}>
@@ -5609,7 +5587,7 @@ const Contracting = ({ contracts, setContracts, invoices, setInvoices }) => {
 // SECTION: CALENDAR
 // ═══════════════════════════════════════════════════════
 
-const CalendarView = ({ events }) => {
+const CalendarView = ({ events, inquiries, proposals }) => {
   const [viewMonth, setViewMonth] = useState(new Date().getMonth());
   const [viewYear, setViewYear] = useState(new Date().getFullYear());
 
@@ -5619,19 +5597,94 @@ const CalendarView = ({ events }) => {
   const blanks = Array.from({ length: firstDay }, (_, i) => i);
   const monthName = new Date(viewYear, viewMonth).toLocaleString("default", { month: "long", year: "numeric" });
 
+  // Combine all calendar items from events, inquiries, and proposals
+  const allCalendarItems = useMemo(() => {
+    const items = [];
+
+    // Add confirmed events (green)
+    events.forEach(ev => {
+      if (ev.date) {
+        items.push({
+          id: ev.id,
+          name: ev.name || "Event",
+          date: ev.date,
+          type: "event",
+          color: "#10b981",
+          venue: ev.venue,
+          time: ev.time,
+          value: ev.value,
+          guests: ev.guests
+        });
+      }
+    });
+
+    // Add inquiries with dates (yellow/orange - potential)
+    inquiries.forEach(inq => {
+      if (inq.date && inq.phase !== "released") {
+        items.push({
+          id: inq.id,
+          name: inq.name || "Inquiry",
+          date: inq.date,
+          type: "inquiry",
+          color: inq.phase === "contracted" ? "#10b981" : inq.phase === "negotiation" ? "#3b82f6" : "#f59e0b",
+          phase: inq.phase,
+          contact: inq.contact,
+          value: inq.value
+        });
+      }
+    });
+
+    // Add proposals with dates (purple - proposed)
+    proposals.forEach(prop => {
+      if (prop.extractedData?.availableDates) {
+        // Parse available dates from proposal
+        const dates = prop.extractedData.availableDates;
+        if (Array.isArray(dates)) {
+          dates.forEach((d, idx) => {
+            if (d) {
+              items.push({
+                id: `${prop.id}-${idx}`,
+                name: `${prop.title || "Proposal"} (Option ${idx + 1})`,
+                date: d,
+                type: "proposal",
+                color: "#8b5cf6",
+                client: prop.client,
+                status: prop.status
+              });
+            }
+          });
+        }
+      }
+    });
+
+    return items;
+  }, [events, inquiries, proposals]);
+
   const getEventsForDay = (day) => {
     const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    return events.filter(e => e.date === dateStr);
+    return allCalendarItems.filter(e => e.date === dateStr);
   };
+
+  // Filter upcoming items (future dates only)
+  const upcomingItems = allCalendarItems
+    .filter(item => item.date >= new Date().toISOString().split('T')[0])
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 10);
 
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
         <div>
           <h1 style={{ fontSize: 28, fontWeight: 700, color: "#f0f0f0", marginBottom: 4 }}>Calendar</h1>
-          <p style={{ color: "#888", fontSize: 14 }}>Contracted events synced automatically</p>
+          <p style={{ color: "#888", fontSize: 14 }}>Events, inquiries, and proposals synced</p>
         </div>
-        <Btn variant="secondary" icon="sync">Sync to Google Calendar</Btn>
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 12, fontSize: 11 }}>
+            <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#10b981" }} /> Events</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#f59e0b" }} /> Inquiries</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 4 }}><span style={{ width: 8, height: 8, borderRadius: "50%", background: "#8b5cf6" }} /> Proposals</span>
+          </div>
+        </div>
       </div>
 
       <div style={{ background: "#1a1d23", borderRadius: 14, border: "1px solid rgba(255,255,255,0.05)", overflow: "hidden" }}>
@@ -5661,7 +5714,7 @@ const CalendarView = ({ events }) => {
               <div key={day} style={{ padding: 8, minHeight: 80, borderBottom: "1px solid rgba(255,255,255,0.03)", borderRight: "1px solid rgba(255,255,255,0.03)", background: isToday ? "rgba(99,102,241,0.06)" : "transparent" }}>
                 <div style={{ fontSize: 12, color: isToday ? "#6366f1" : "#888", fontWeight: isToday ? 700 : 400, marginBottom: 4 }}>{day}</div>
                 {dayEvents.map(ev => (
-                  <div key={ev.id} style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, background: "#6366f122", color: "#6366f1", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  <div key={ev.id} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: `${ev.color}22`, color: ev.color, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                     {ev.name}
                   </div>
                 ))}
@@ -5672,20 +5725,35 @@ const CalendarView = ({ events }) => {
       </div>
 
       <div style={{ marginTop: 24 }}>
-        <h3 style={{ fontSize: 15, fontWeight: 600, color: "#f0f0f0", marginBottom: 12 }}>Upcoming Events</h3>
-        {events.sort((a, b) => a.date.localeCompare(b.date)).map(ev => (
-          <div key={ev.id} style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 16px", background: "#1a1d23", borderRadius: 10, border: "1px solid rgba(255,255,255,0.05)", marginBottom: 8 }}>
-            <div style={{ width: 48, textAlign: "center" }}>
-              <div style={{ fontSize: 20, fontWeight: 700, color: "#6366f1", fontFamily: "monospace" }}>{new Date(ev.date + "T00:00:00").getDate()}</div>
-              <div style={{ fontSize: 11, color: "#888" }}>{new Date(ev.date + "T00:00:00").toLocaleDateString("en-US", { month: "short" })}</div>
-            </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 14, color: "#f0f0f0", fontWeight: 500 }}>{ev.name}</div>
-              <div style={{ fontSize: 12, color: "#888" }}>{ev.venue} · {ev.guests} guests · {ev.time}</div>
-            </div>
-            <div style={{ fontFamily: "monospace", fontSize: 14, fontWeight: 600, color: "#10b981" }}>{formatCurrency(ev.value)}</div>
+        <h3 style={{ fontSize: 15, fontWeight: 600, color: "#f0f0f0", marginBottom: 12 }}>Upcoming</h3>
+        {upcomingItems.length === 0 ? (
+          <div style={{ padding: 24, textAlign: "center", color: "#666", background: "#1a1d23", borderRadius: 10 }}>
+            No upcoming events, inquiries, or proposals with dates.
           </div>
-        ))}
+        ) : (
+          upcomingItems.map(item => (
+            <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 16px", background: "#1a1d23", borderRadius: 10, border: "1px solid rgba(255,255,255,0.05)", marginBottom: 8 }}>
+              <div style={{ width: 48, textAlign: "center" }}>
+                <div style={{ fontSize: 20, fontWeight: 700, color: item.color, fontFamily: "monospace" }}>{new Date(item.date + "T00:00:00").getDate()}</div>
+                <div style={{ fontSize: 11, color: "#888" }}>{new Date(item.date + "T00:00:00").toLocaleDateString("en-US", { month: "short" })}</div>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ fontSize: 14, color: "#f0f0f0", fontWeight: 500 }}>{item.name}</div>
+                  <span style={{ fontSize: 9, padding: "2px 6px", borderRadius: 4, background: `${item.color}22`, color: item.color, textTransform: "uppercase", fontWeight: 600 }}>
+                    {item.type}
+                  </span>
+                </div>
+                <div style={{ fontSize: 12, color: "#888" }}>
+                  {item.type === "event" && `${item.venue || "TBD"} · ${item.guests || "?"} guests · ${item.time || "TBD"}`}
+                  {item.type === "inquiry" && `${item.contact || "Contact TBD"} · Phase: ${item.phase}`}
+                  {item.type === "proposal" && `${item.client || "Client"} · Status: ${item.status}`}
+                </div>
+              </div>
+              {item.value && <div style={{ fontFamily: "monospace", fontSize: 14, fontWeight: 600, color: "#10b981" }}>{formatCurrency(item.value)}</div>}
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
@@ -6015,6 +6083,33 @@ export default function App() {
 
   useEffect(() => { localStorage.setItem("sg_activeView", activeView); }, [activeView]);
 
+  // Clear all demo/sample data from localStorage
+  const handleClearDemoData = useCallback(() => {
+    // Clear all app data from localStorage
+    const keysToRemove = [
+      'cs_transactions', 'cs_invoices', 'cs_inquiries', 'cs_contracts',
+      'cs_events', 'cs_proposals', 'cs_expenses', 'cs_creditCards',
+      'cs_bankAccounts', 'cs_categoryRules', 'cs_customCategories', 'cs_budgets'
+    ];
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+
+    // Reset all state to empty
+    setTransactions([]);
+    setInvoices([]);
+    setInquiries([]);
+    setContracts([]);
+    setEvents([]);
+    setProposals([]);
+    setExpenses([]);
+    setCreditCards([]);
+    setBankAccounts([]);
+    setCategoryRules({});
+    setCustomCategories([]);
+    setBudgets({});
+
+    alert('Demo data cleared! The app now starts fresh.');
+  }, [setTransactions, setInvoices, setInquiries, setContracts, setEvents, setProposals, setExpenses, setCreditCards, setBankAccounts, setCategoryRules, setCustomCategories, setBudgets]);
+
   const handleConvertToContract = (inquiry) => {
     const contract = {
       id: generateId(),
@@ -6210,7 +6305,7 @@ export default function App() {
 
   const renderView = () => {
     switch (activeView) {
-      case "dashboard": return <Dashboard transactions={transactions} invoices={invoices} inquiries={inquiries} events={events} />;
+      case "dashboard": return <Dashboard transactions={transactions} invoices={invoices} inquiries={inquiries} events={events} onClearDemoData={handleClearDemoData} />;
       case "aiagent": return <AIAgent inquiries={inquiries} setInquiries={setInquiries} onSendToProposals={handleSendToProposals} />;
       case "proposals": return <ProposalEditor proposals={proposals} setProposals={setProposals} />;
       case "upcoming": return <UpcomingGigs events={events} contracts={contracts} invoices={invoices} />;
@@ -6220,11 +6315,11 @@ export default function App() {
       case "invoicing": return <Invoicing invoices={invoices} setInvoices={setInvoices} />;
       case "inquiries": return <InquiryManagement inquiries={inquiries} setInquiries={setInquiries} onConvertToContract={handleConvertToContract} />;
       case "contracts": return <Contracting contracts={contracts} setContracts={setContracts} invoices={invoices} setInvoices={setInvoices} />;
-      case "calendar": return <CalendarView events={events} />;
+      case "calendar": return <CalendarView events={events} inquiries={inquiries} proposals={proposals} />;
       case "events": return <EventTasks events={events} setEvents={setEvents} />;
       case "email": return <EmailComms events={events} />;
       case "payments": return <Payments invoices={invoices} transactions={transactions} />;
-      default: return <Dashboard transactions={transactions} invoices={invoices} inquiries={inquiries} events={events} />;
+      default: return <Dashboard transactions={transactions} invoices={invoices} inquiries={inquiries} events={events} onClearDemoData={handleClearDemoData} />;
     }
   };
 
