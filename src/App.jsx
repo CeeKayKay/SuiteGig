@@ -3156,6 +3156,8 @@ const Invoicing = ({ invoices, setInvoices }) => {
   // Sorting
   const [sortBy, setSortBy] = useState("date"); // "number", "client", "date", "dueDate", "total", "status"
   const [sortDir, setSortDir] = useState("desc"); // "asc" or "desc" - default desc for newest first
+  // Selection for bulk actions
+  const [selectedIds, setSelectedIds] = useState(new Set());
   // CSV Import
   const [showImportModal, setShowImportModal] = useState(false);
   const [importedInvoices, setImportedInvoices] = useState([]);
@@ -3367,6 +3369,34 @@ const Invoicing = ({ invoices, setInvoices }) => {
     return 0;
   });
 
+  // Selection functions
+  const toggleSelect = (id, e) => {
+    e?.stopPropagation();
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === sortedInvoices.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(sortedInvoices.map(inv => inv.id)));
+    }
+  };
+
+  const deleteSelected = () => {
+    if (selectedIds.size === 0) return;
+    const count = selectedIds.size;
+    if (confirm(`Are you sure you want to delete ${count} invoice${count > 1 ? 's' : ''}? This cannot be undone.`)) {
+      setInvoices(prev => prev.filter(inv => !selectedIds.has(inv.id)));
+      setSelectedIds(new Set());
+    }
+  };
+
   // Sortable header component
   const SortHeader = ({ label, sortKey }) => (
     <div onClick={() => toggleSort(sortKey)}
@@ -3385,6 +3415,11 @@ const Invoicing = ({ invoices, setInvoices }) => {
           <p style={{ color: "#888", fontSize: 14 }}>Create, track, and manage client invoices</p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
+          {selectedIds.size > 0 && (
+            <Btn variant="danger" icon="trash" onClick={deleteSelected}>
+              Delete {selectedIds.size} Selected
+            </Btn>
+          )}
           <Btn variant="secondary" icon="download" onClick={() => setShowImportModal(true)}>Import CSV</Btn>
           <Btn icon="plus" onClick={() => setShowNew(true)}>New Invoice</Btn>
         </div>
@@ -3398,6 +3433,18 @@ const Invoicing = ({ invoices, setInvoices }) => {
 
       <Table
         columns={[
+          { key: "select", label: "", headerRender: () => (
+            <input type="checkbox"
+              checked={selectedIds.size === sortedInvoices.length && sortedInvoices.length > 0}
+              onChange={toggleSelectAll}
+              title={selectedIds.size === sortedInvoices.length ? "Deselect all" : "Select all"}
+              style={{ width: 15, height: 15, accentColor: "#6366f1", cursor: "pointer" }} />
+          ), render: r => (
+            <input type="checkbox" checked={selectedIds.has(r.id)}
+              onChange={(e) => toggleSelect(r.id, e)}
+              onClick={(e) => e.stopPropagation()}
+              style={{ width: 15, height: 15, accentColor: "#6366f1", cursor: "pointer" }} />
+          )},
           { key: "number", label: "Invoice #", headerRender: () => <SortHeader label="Invoice #" sortKey="number" />, render: r => <span style={{ fontFamily: "monospace", color: "#6366f1", fontWeight: 600 }}>{r.number}</span> },
           { key: "client", label: "Client", headerRender: () => <SortHeader label="Client" sortKey="client" /> },
           { key: "date", label: "Date", headerRender: () => <SortHeader label="Date" sortKey="date" />, render: r => formatDate(r.date) },
