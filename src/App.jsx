@@ -3687,7 +3687,7 @@ const Invoicing = ({ invoices, setInvoices }) => {
                             <table>
                               <thead><tr><th>Description</th><th style="text-align: right;">Qty</th><th style="text-align: right;">Rate</th><th style="text-align: right;">Amount</th></tr></thead>
                               <tbody>
-                                ${inv.items.map(it => `<tr><td>${it.desc}</td><td style="text-align: right;">${it.qty}</td><td style="text-align: right;">$${it.rate.toFixed(2)}</td><td style="text-align: right;">$${(it.qty * it.rate).toFixed(2)}</td></tr>`).join('')}
+                                ${inv.items.map(it => `<tr><td style="white-space: pre-wrap;">${it.desc}</td><td style="text-align: right;">${it.qty}</td><td style="text-align: right;">$${it.rate.toFixed(2)}</td><td style="text-align: right;">$${(it.qty * it.rate).toFixed(2)}</td></tr>`).join('')}
                               </tbody>
                             </table>
                             <div class="total-row">Total: $${total.toFixed(2)}</div>
@@ -3732,7 +3732,7 @@ const Invoicing = ({ invoices, setInvoices }) => {
                             <table>
                               <thead><tr><th>Description</th><th style="text-align: right;">Qty</th><th style="text-align: right;">Rate</th><th style="text-align: right;">Amount</th></tr></thead>
                               <tbody>
-                                ${inv.items.map(it => `<tr><td>${it.desc}</td><td style="text-align: right;">${it.qty}</td><td style="text-align: right;">$${it.rate.toFixed(2)}</td><td style="text-align: right;">$${(it.qty * it.rate).toFixed(2)}</td></tr>`).join('')}
+                                ${inv.items.map(it => `<tr><td style="white-space: pre-wrap;">${it.desc}</td><td style="text-align: right;">${it.qty}</td><td style="text-align: right;">$${it.rate.toFixed(2)}</td><td style="text-align: right;">$${(it.qty * it.rate).toFixed(2)}</td></tr>`).join('')}
                               </tbody>
                             </table>
                             <div class="total-row">Total: $${total.toFixed(2)}</div>
@@ -3919,7 +3919,7 @@ const Invoicing = ({ invoices, setInvoices }) => {
                           </>
                         ) : (
                           <>
-                            <td style={{ padding: "14px 0", fontSize: 14, color: "#333" }}>{it.desc}</td>
+                            <td style={{ padding: "14px 0", fontSize: 14, color: "#333", whiteSpace: "pre-wrap" }}>{it.desc}</td>
                             <td style={{ padding: "14px 0", textAlign: "right", fontSize: 14, color: "#666" }}>{it.qty}</td>
                             <td style={{ padding: "14px 0", textAlign: "right", fontSize: 14, color: "#666", fontFamily: "monospace" }}>${it.rate.toFixed(2)}</td>
                             <td style={{ padding: "14px 0", textAlign: "right", fontSize: 14, color: "#333", fontWeight: 600, fontFamily: "monospace" }}>${(it.qty * it.rate).toFixed(2)}</td>
