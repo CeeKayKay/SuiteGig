@@ -348,13 +348,45 @@ const normalizeMerchant = (name) => {
     .trim();
 };
 
-// Check if two merchants match (considering domains and fuzzy matching)
+// US state abbreviations and common location words to strip for merchant core extraction
+const LOCATION_WORDS = new Set([
+  'al','ak','az','ar','ca','co','ct','de','fl','ga','hi','id','il','in','ia','ks','ky','la','me','md',
+  'ma','mi','mn','ms','mo','mt','ne','nv','nh','nj','nm','ny','nc','nd','oh','ok','or','pa','ri','sc',
+  'sd','tn','tx','ut','vt','va','wa','wv','wi','wy','dc', // US states
+  'usa','us','store','shop','inc','llc','corp','ltd','the','and','of','at','in','on' // common words
+]);
+
+// Extract the core merchant name (brand name without location/store info)
+const extractMerchantCore = (name) => {
+  const normalized = normalizeMerchant(name);
+  const words = normalized.split(' ').filter(w => w.length > 0);
+
+  // Filter out location words and keep brand words
+  const coreWords = [];
+  for (const word of words) {
+    // Stop if we hit a location word (city/state usually comes after brand)
+    if (LOCATION_WORDS.has(word) && coreWords.length > 0) break;
+    // Skip pure numbers
+    if (/^\d+$/.test(word)) continue;
+    coreWords.push(word);
+  }
+
+  // Return at least the first word if we have nothing
+  return coreWords.length > 0 ? coreWords.join(' ') : (words[0] || '');
+};
+
+// Check if two merchants match (considering domains, brand names, and fuzzy matching)
 const merchantsMatch = (a, b) => {
   const normA = normalizeMerchant(a);
   const normB = normalizeMerchant(b);
 
   // Exact match after normalization
   if (normA === normB) return true;
+
+  // Core merchant name match (e.g., "walgreens" from "walgreens pinole ca" and "walgreens new orleans la")
+  const coreA = extractMerchantCore(a);
+  const coreB = extractMerchantCore(b);
+  if (coreA && coreB && coreA === coreB) return true;
 
   // Domain-based matching: if both have the same domain, consider them the same merchant
   const domainA = extractDomain(a);
@@ -374,6 +406,10 @@ const merchantsMatch = (a, b) => {
 };
 
 const findCategoryRule = (merchant, rules) => {
+  const merchantCore = extractMerchantCore(merchant);
+  // First check for exact core match (most common case)
+  if (rules[merchantCore]) return rules[merchantCore];
+  // Then check for fuzzy matches
   for (const [key, cat] of Object.entries(rules)) {
     if (merchantsMatch(merchant, key)) return cat;
   }
@@ -1213,7 +1249,8 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
 
   const applyRuleNow = (cat) => {
     if (!editingExpense || cat === "Unknown") return;
-    const merchantKey = normalizeMerchant(editingExpense.merchant);
+    // Use core merchant name as the rule key (e.g., "walgreens" instead of "walgreens pinole ca")
+    const merchantKey = extractMerchantCore(editingExpense.merchant);
     setExpenses(prev => prev.map(e => {
       if (e.id === editingExpense.id) return e;
       if (merchantsMatch(e.merchant, editingExpense.merchant)) {
@@ -1409,8 +1446,9 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
     // Learn new rules from this import (for merchants we auto-categorized)
     const newRules = { ...categoryRules };
     imported.forEach(exp => {
-      if (exp.category !== "Unknown" && !categoryRules[exp.merchant]) {
-        newRules[exp.merchant] = exp.category;
+      const merchantCore = extractMerchantCore(exp.merchant);
+      if (exp.category !== "Unknown" && !newRules[merchantCore]) {
+        newRules[merchantCore] = exp.category;
       }
     });
     if (Object.keys(newRules).length > Object.keys(categoryRules).length) {
@@ -1657,8 +1695,9 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
     // Learn new rules from this import
     const newRules = { ...categoryRules };
     toImport.forEach(exp => {
-      if (exp.category !== "Unknown" && !categoryRules[exp.merchant]) {
-        newRules[exp.merchant] = exp.category;
+      const merchantCore = extractMerchantCore(exp.merchant);
+      if (exp.category !== "Unknown" && !newRules[merchantCore]) {
+        newRules[merchantCore] = exp.category;
       }
     });
     if (Object.keys(newRules).length > Object.keys(categoryRules).length) {
