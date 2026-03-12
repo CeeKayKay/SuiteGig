@@ -4108,7 +4108,7 @@ Best regards,
     try {
       await setInquiries(prev => [...prev, inquiry]);
       setExtractedData(null);
-      setInputText("");
+      // Don't clear input - keep it until user clicks Clear button
       setEditMode(false);
       alert(`Inquiry "${inquiry.name}" saved successfully!`);
     } catch (err) {
@@ -4418,8 +4418,7 @@ Event With [Client Name]
                     setEditMode(false);
                     setProposalData(null);
                     setGeneratedProposal("");
-                    setInputText("");
-                    localStorage.removeItem("sg_aiagent_input"); // Clear saved input after sending
+                    // Don't clear input - keep it until user clicks Clear button
                   }
                 }}
                 icon="send"
