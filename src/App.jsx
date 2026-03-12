@@ -3153,6 +3153,9 @@ const Invoicing = ({ invoices, setInvoices }) => {
   const [showNew, setShowNew] = useState(false);
   const [selectedInv, setSelectedInv] = useState(null);
   const [newInvoice, setNewInvoice] = useState({ client: "", email: "", items: [{ desc: "", qty: 1, rate: 0 }], dueDate: "" });
+  // Sorting
+  const [sortBy, setSortBy] = useState("date"); // "number", "client", "date", "dueDate", "total", "status"
+  const [sortDir, setSortDir] = useState("desc"); // "asc" or "desc" - default desc for newest first
   // CSV Import
   const [showImportModal, setShowImportModal] = useState(false);
   const [importedInvoices, setImportedInvoices] = useState([]);
@@ -3336,6 +3339,44 @@ const Invoicing = ({ invoices, setInvoices }) => {
   const paidTotal = invoices.filter(i => i.status === "paid").reduce((s, inv) => s + inv.items.reduce((a, it) => a + it.qty * it.rate, 0), 0);
   const outstandingTotal = invoices.filter(i => i.status === "sent").reduce((s, inv) => s + inv.items.reduce((a, it) => a + it.qty * it.rate, 0), 0);
 
+  // Toggle sort
+  const toggleSort = (key) => {
+    if (sortBy === key) {
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(key);
+      setSortDir(key === "date" || key === "dueDate" ? "desc" : "asc"); // Dates default desc, others asc
+    }
+  };
+
+  // Sort invoices
+  const sortedInvoices = [...invoices].sort((a, b) => {
+    let aVal, bVal;
+    if (sortBy === "total") {
+      aVal = a.items.reduce((s, it) => s + it.qty * it.rate, 0);
+      bVal = b.items.reduce((s, it) => s + it.qty * it.rate, 0);
+    } else if (sortBy === "date" || sortBy === "dueDate") {
+      aVal = a[sortBy] || "";
+      bVal = b[sortBy] || "";
+    } else {
+      aVal = (a[sortBy] || "").toString().toLowerCase();
+      bVal = (b[sortBy] || "").toString().toLowerCase();
+    }
+    if (aVal < bVal) return sortDir === "asc" ? -1 : 1;
+    if (aVal > bVal) return sortDir === "asc" ? 1 : -1;
+    return 0;
+  });
+
+  // Sortable header component
+  const SortHeader = ({ label, sortKey }) => (
+    <div onClick={() => toggleSort(sortKey)}
+      style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 4, userSelect: "none" }}
+      title={`Sort by ${label}`}>
+      {label}
+      {sortBy === sortKey && <span style={{ fontSize: 10, color: "#6366f1" }}>{sortDir === "asc" ? "↑" : "↓"}</span>}
+    </div>
+  );
+
   return (
     <div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
@@ -3357,18 +3398,18 @@ const Invoicing = ({ invoices, setInvoices }) => {
 
       <Table
         columns={[
-          { key: "number", label: "Invoice #", render: r => <span style={{ fontFamily: "monospace", color: "#6366f1", fontWeight: 600 }}>{r.number}</span> },
-          { key: "client", label: "Client" },
-          { key: "date", label: "Date", render: r => formatDate(r.date) },
-          { key: "dueDate", label: "Due Date", render: r => formatDate(r.dueDate) },
-          { key: "total", label: "Total", align: "right", render: r => (
+          { key: "number", label: "Invoice #", headerRender: () => <SortHeader label="Invoice #" sortKey="number" />, render: r => <span style={{ fontFamily: "monospace", color: "#6366f1", fontWeight: 600 }}>{r.number}</span> },
+          { key: "client", label: "Client", headerRender: () => <SortHeader label="Client" sortKey="client" /> },
+          { key: "date", label: "Date", headerRender: () => <SortHeader label="Date" sortKey="date" />, render: r => formatDate(r.date) },
+          { key: "dueDate", label: "Due Date", headerRender: () => <SortHeader label="Due Date" sortKey="dueDate" />, render: r => formatDate(r.dueDate) },
+          { key: "total", label: "Total", align: "right", headerRender: () => <SortHeader label="Total" sortKey="total" />, render: r => (
             <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{formatCurrency(r.items.reduce((a, it) => a + it.qty * it.rate, 0))}</span>
           )},
-          { key: "status", label: "Status", render: r => (
-            <Badge color={r.status === "paid" ? "#10b981" : r.status === "sent" ? "#f59e0b" : "#888"}>{r.status}</Badge>
+          { key: "status", label: "Status", headerRender: () => <SortHeader label="Status" sortKey="status" />, render: r => (
+            <Badge color={r.status === "paid" ? "#10b981" : r.status === "sent" ? "#f59e0b" : r.status === "partial" ? "#8b5cf6" : "#888"}>{r.status}</Badge>
           )},
         ]}
-        data={invoices}
+        data={sortedInvoices}
         onRowClick={r => setSelectedInv(r)}
       />
 
@@ -3571,6 +3612,7 @@ const AIAgent = ({ inquiries, setInquiries, onSendToProposals }) => {
   const [archivedInput, setArchivedInput] = useState(() => {
     return localStorage.getItem("sg_aiagent_archived") || "";
   });
+  const [viewingInquiry, setViewingInquiry] = useState(null);
   const recognitionRef = useRef(null);
 
   // Save input to localStorage whenever it changes
@@ -4482,7 +4524,10 @@ Event With [Client Name]
           <h3 style={{ fontSize: 14, fontWeight: 600, color: "#888", marginBottom: 16 }}>Recent Inquiries ({inquiries.length})</h3>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
             {inquiries.slice(0, 6).map(inq => (
-              <div key={inq.id} style={{ background: "#1a1d23", borderRadius: 10, padding: 16, border: "1px solid rgba(255,255,255,0.05)" }}>
+              <div key={inq.id} onClick={() => setViewingInquiry(inq)}
+                style={{ background: "#1a1d23", borderRadius: 10, padding: 16, border: "1px solid rgba(255,255,255,0.05)", cursor: "pointer", transition: "all 0.15s" }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(99,102,241,0.3)"; e.currentTarget.style.background = "#1e2128"; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,0.05)"; e.currentTarget.style.background = "#1a1d23"; }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
                   <div style={{ fontSize: 14, fontWeight: 600, color: "#f0f0f0" }}>{inq.name}</div>
                   <Badge color={inq.grade === "A" ? "#10b981" : inq.grade === "B" ? "#f59e0b" : "#888"}>{inq.grade}</Badge>
@@ -4497,6 +4542,83 @@ Event With [Client Name]
           </div>
         </div>
       )}
+
+      {/* View Inquiry Modal */}
+      <Modal isOpen={viewingInquiry !== null} onClose={() => setViewingInquiry(null)} title="Inquiry Details" width="650px">
+        {viewingInquiry && (
+          <div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+              <div>
+                <h3 style={{ fontSize: 20, fontWeight: 700, color: "#f0f0f0", margin: 0 }}>{viewingInquiry.name}</h3>
+                <div style={{ fontSize: 13, color: "#888", marginTop: 4 }}>{viewingInquiry.contact}</div>
+              </div>
+              <Badge color={viewingInquiry.grade === "A" ? "#10b981" : viewingInquiry.grade === "B" ? "#f59e0b" : "#888"} style={{ fontSize: 14, padding: "6px 12px" }}>
+                Grade {viewingInquiry.grade}
+              </Badge>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 20 }}>
+              <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: 12 }}>
+                <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Event Date</div>
+                <div style={{ fontSize: 14, color: "#6366f1", fontWeight: 600 }}>{formatDate(viewingInquiry.date) || "Not specified"}</div>
+              </div>
+              <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: 12 }}>
+                <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Estimated Value</div>
+                <div style={{ fontSize: 14, color: "#10b981", fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(viewingInquiry.value)}</div>
+              </div>
+              <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: 12 }}>
+                <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Email</div>
+                <div style={{ fontSize: 14, color: "#f0f0f0" }}>{viewingInquiry.email || "Not provided"}</div>
+              </div>
+              <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: 12 }}>
+                <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Phone</div>
+                <div style={{ fontSize: 14, color: "#f0f0f0" }}>{viewingInquiry.phone || "Not provided"}</div>
+              </div>
+              <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: 12 }}>
+                <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Phase</div>
+                <div style={{ fontSize: 14, color: "#f0f0f0", textTransform: "capitalize" }}>{viewingInquiry.phase || "New"}</div>
+              </div>
+              <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: 12 }}>
+                <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Created</div>
+                <div style={{ fontSize: 14, color: "#f0f0f0" }}>{viewingInquiry.created_at ? new Date(viewingInquiry.created_at).toLocaleDateString() : "Unknown"}</div>
+              </div>
+            </div>
+
+            {viewingInquiry.notes && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Notes</div>
+                <div style={{ background: "rgba(255,255,255,0.03)", borderRadius: 8, padding: 12, fontSize: 13, color: "#ccc", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>
+                  {viewingInquiry.notes}
+                </div>
+              </div>
+            )}
+
+            {viewingInquiry.nextSteps && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>Next Steps</div>
+                <div style={{ background: "rgba(99,102,241,0.06)", borderRadius: 8, padding: 12, fontSize: 13, color: "#a5b4fc", border: "1px solid rgba(99,102,241,0.15)" }}>
+                  {viewingInquiry.nextSteps}
+                </div>
+              </div>
+            )}
+
+            {viewingInquiry.sourceInput && (
+              <div style={{ marginBottom: 20 }}>
+                <div style={{ fontSize: 11, color: "#888", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8, display: "flex", alignItems: "center", gap: 8 }}>
+                  <Icon name="sparkle" size={12} /> Original AI Agent Input
+                </div>
+                <div style={{ background: "rgba(139,92,246,0.06)", borderRadius: 8, padding: 12, fontSize: 12, color: "#c4b5fd", lineHeight: 1.6, whiteSpace: "pre-wrap", maxHeight: 200, overflowY: "auto", border: "1px solid rgba(139,92,246,0.15)" }}>
+                  {viewingInquiry.sourceInput}
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, paddingTop: 16, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <Btn variant="secondary" onClick={() => setViewingInquiry(null)}>Close</Btn>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <style>{`
         @keyframes pulse {
