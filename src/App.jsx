@@ -351,7 +351,7 @@ const normalizeMerchant = (name) => {
 // Common chain store brand names (first word is the brand) - includes common abbreviations
 const CHAIN_STORES = new Set([
   'walgreens', 'walgr', 'walmart', 'walmrt', 'target', 'costco', 'cvs', 'kroger', 'safeway', 'albertsons',
-  'publix', 'wegmans', 'trader', 'whole', 'wholefds', 'wholefoods', 'aldi', 'lidl', 'food', 'giant', 'stop',
+  'publix', 'wegmans', 'trader', 'traderjoe', 'traderjoes', 'whole', 'wholefds', 'wholefoods', 'aldi', 'lidl', 'food', 'giant', 'stop',
   'meijer', 'heb', 'winn', 'sprouts', 'starbucks', 'starbuck', 'sbux', 'mcdonalds', 'mcdonald', 'subway', 'chipotle',
   'wendys', 'wendy', 'burger', 'taco', 'chick', 'chickfila', 'dominos', 'domino', 'pizza', 'dunkin', 'panera',
   'home', 'homedepot', 'lowes', 'lowe', 'menards', 'ace', 'autozone', 'oreilly', 'orly', 'advance', 'napa',
@@ -2299,8 +2299,8 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
               options={[...expenseCategories.map(c => ({ value: c, label: c })), { value: "__add_custom__", label: "+ Add Custom Category" }]} />
 
             {editCategory !== "Unknown" && (() => {
-              const merchantKey = editingExpense.merchant.toLowerCase().trim();
-              const othersCount = expenses.filter(e => e.id !== editingExpense.id && e.merchant.toLowerCase().trim() === merchantKey).length;
+              const merchantCore = extractMerchantCore(editingExpense.merchant);
+              const othersCount = expenses.filter(e => e.id !== editingExpense.id && merchantsMatch(e.merchant, editingExpense.merchant)).length;
               return (
                 <label style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", marginBottom: 14, marginTop: -6, borderRadius: 8,
                   background: applyToAll ? "rgba(99,102,241,0.08)" : "rgba(255,255,255,0.02)", border: `1px solid ${applyToAll ? "rgba(99,102,241,0.25)" : "rgba(255,255,255,0.06)"}`,
@@ -2308,8 +2308,8 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
                   <input type="checkbox" checked={applyToAll} onChange={e => { setApplyToAll(e.target.checked); if (e.target.checked) applyRuleNow(editCategory); }} style={{ accentColor: "#6366f1", cursor: "pointer" }} />
                   <span style={{ fontSize: 12, color: applyToAll ? "#c7d2fe" : "#888" }}>
                     {othersCount > 0
-                      ? <>Apply <strong style={{ color: applyToAll ? "#a5b4fc" : "#ccc" }}>"{editCategory}"</strong> to all {othersCount} other <strong style={{ color: applyToAll ? "#a5b4fc" : "#ccc" }}>{editingExpense.merchant}</strong> expense{othersCount > 1 ? "s" : ""} + remember for future imports</>
-                      : <>Always categorize <strong style={{ color: applyToAll ? "#a5b4fc" : "#ccc" }}>{editingExpense.merchant}</strong> as <strong style={{ color: applyToAll ? "#a5b4fc" : "#ccc" }}>"{editCategory}"</strong> for future imports</>
+                      ? <>Apply <strong style={{ color: applyToAll ? "#a5b4fc" : "#ccc" }}>"{editCategory}"</strong> to all {othersCount} other <strong style={{ color: applyToAll ? "#a5b4fc" : "#ccc" }}>{merchantCore.toUpperCase()}</strong> expense{othersCount > 1 ? "s" : ""} + remember for future</>
+                      : <>Always categorize <strong style={{ color: applyToAll ? "#a5b4fc" : "#ccc" }}>{merchantCore.toUpperCase()}</strong> as <strong style={{ color: applyToAll ? "#a5b4fc" : "#ccc" }}>"{editCategory}"</strong> for future imports</>
                     }
                   </span>
                 </label>
