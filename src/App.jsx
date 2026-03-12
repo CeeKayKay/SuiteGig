@@ -43,7 +43,7 @@ const MERCHANT_PATTERNS = [
   { patterns: ["udemy", "coursera", "skillshare", "linkedin learn", "masterclass", "pluralsight", "treehouse", "codecademy", "edx", "education", "training", "workshop", "seminar", "conference", "webinar", "certification", "course", "tuition", "school", "university", "college", "book", "kindle"], category: "Education & Training" },
 ];
 
-// Smart categorization function
+// Smart categorization function - uses extractMerchantCore for consistent matching
 const smartCategorize = (merchant, userRules = {}) => {
   const normalized = merchant.toLowerCase().trim()
     .replace(/\b\d{5,}\b/g, "")
@@ -53,23 +53,23 @@ const smartCategorize = (merchant, userRules = {}) => {
     .replace(/[^a-z0-9\s&]/g, " ")
     .trim();
 
-  // Extract domain from merchant for domain-based matching
-  const merchantDomain = extractDomain(merchant);
+  // Get core merchant name for matching (e.g., "trader" from "TRADER JOE S #755")
+  const merchantCore = extractMerchantCore(merchant);
 
-  // 1. Check user's learned rules first (exact match or domain match)
+  // 1. Check user's learned rules first - use core merchant matching
+  // Rules are stored by core name (e.g., "trader" -> "Groceries")
+  if (merchantCore && userRules[merchantCore]) {
+    return { category: userRules[merchantCore], confidence: "high", source: "learned" };
+  }
+
+  // 2. Check if any rule key matches this merchant using merchantsMatch
   for (const [key, cat] of Object.entries(userRules)) {
-    const normKey = key.toLowerCase().trim().replace(/\*+/g, " ").replace(/[^a-z0-9\s&]/g, " ").trim();
-    if (normalized === normKey || normalized.includes(normKey) || normKey.includes(normalized)) {
-      return { category: cat, confidence: "high", source: "learned" };
-    }
-    // Domain-based matching: if both have the same domain, it's a high-confidence match
-    const keyDomain = extractDomain(key);
-    if (merchantDomain && keyDomain && merchantDomain === keyDomain) {
+    if (merchantsMatch(merchant, key)) {
       return { category: cat, confidence: "high", source: "learned" };
     }
   }
 
-  // 2. Check common merchant patterns
+  // 3. Check common merchant patterns (built-in categories)
   for (const { patterns, category } of MERCHANT_PATTERNS) {
     for (const pattern of patterns) {
       if (normalized.includes(pattern.toLowerCase())) {
@@ -78,19 +78,13 @@ const smartCategorize = (merchant, userRules = {}) => {
     }
   }
 
-  // 3. Check user rules with fuzzy matching (partial word match or domain base match)
-  for (const [key, cat] of Object.entries(userRules)) {
-    const normKey = key.toLowerCase().trim().replace(/\*+/g, " ").replace(/[^a-z0-9\s&]/g, " ").trim();
-    const words = normKey.split(" ").filter(w => w.length > 3);
-    if (words.some(word => normalized.includes(word))) {
-      return { category: cat, confidence: "low", source: "fuzzy" };
-    }
-    // Check if domain base from rule matches in merchant (for truncated names)
-    const keyDomain = extractDomain(key);
-    if (keyDomain) {
-      const domainBase = keyDomain.split('.')[0]; // e.g., "vanishingincmagic"
-      if (domainBase.length > 5 && normalized.includes(domainBase)) {
-        return { category: cat, confidence: "low", source: "fuzzy" };
+  // 4. Domain-based matching for online merchants
+  const merchantDomain = extractDomain(merchant);
+  if (merchantDomain) {
+    for (const [key, cat] of Object.entries(userRules)) {
+      const keyDomain = extractDomain(key);
+      if (keyDomain && merchantDomain === keyDomain) {
+        return { category: cat, confidence: "high", source: "learned" };
       }
     }
   }

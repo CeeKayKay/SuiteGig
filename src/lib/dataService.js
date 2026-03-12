@@ -784,9 +784,9 @@ class DataService {
         return local;
       }
 
-      // Convert array to object
+      // Convert array to object (database uses 'pattern' column for merchant key)
       const supabaseRules = (data || []).reduce((acc, row) => {
-        acc[row.merchant] = row.category;
+        acc[row.pattern] = row.category;
         return acc;
       }, {});
       console.log('[DataService] Supabase has', Object.keys(supabaseRules).length, 'category rules');
@@ -824,14 +824,14 @@ class DataService {
     }
 
     try {
-      // Convert object to array for Supabase
-      const rows = Object.entries(rules).map(([merchant, category]) => ({
-        merchant,
+      // Convert object to array for Supabase (uses 'pattern' column for merchant key)
+      const rows = Object.entries(rules).map(([pattern, category]) => ({
+        pattern,
         category
       }));
 
       // Clear and re-insert
-      const { error: deleteError } = await supabase.from('category_rules').delete().neq('merchant', '');
+      const { error: deleteError } = await supabase.from('category_rules').delete().neq('pattern', '');
       if (deleteError) {
         console.error('[DataService] Error deleting category rules:', deleteError);
       }
