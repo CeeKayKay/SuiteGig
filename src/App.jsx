@@ -3878,15 +3878,16 @@ const Invoicing = ({ invoices, setInvoices }) => {
                       <tr key={i} style={{ borderBottom: "1px solid #eee" }}>
                         {isEditingInvoice ? (
                           <>
-                            <td style={{ padding: "8px 4px 8px 0" }}>
-                              <input
+                            <td style={{ padding: "8px 4px 8px 0", verticalAlign: "top" }}>
+                              <textarea
                                 value={it.desc}
                                 onChange={e => updateEditItem(i, "desc", e.target.value)}
                                 placeholder="Description"
-                                style={{ width: "100%", fontSize: 14, color: "#333", border: "1px solid #ddd", borderRadius: 6, padding: "8px 10px", fontFamily: "inherit" }}
+                                rows={Math.max(1, (it.desc?.split('\n').length || 1))}
+                                style={{ width: "100%", fontSize: 14, color: "#333", border: "1px solid #ddd", borderRadius: 6, padding: "8px 10px", fontFamily: "inherit", resize: "vertical", minHeight: 38 }}
                               />
                             </td>
-                            <td style={{ padding: "8px 4px" }}>
+                            <td style={{ padding: "8px 4px", verticalAlign: "top" }}>
                               <input
                                 type="number"
                                 value={it.qty}
@@ -3894,7 +3895,7 @@ const Invoicing = ({ invoices, setInvoices }) => {
                                 style={{ width: "100%", textAlign: "right", fontSize: 14, color: "#666", border: "1px solid #ddd", borderRadius: 6, padding: "8px 10px", fontFamily: "inherit" }}
                               />
                             </td>
-                            <td style={{ padding: "8px 4px" }}>
+                            <td style={{ padding: "8px 4px", verticalAlign: "top" }}>
                               <input
                                 type="number"
                                 step="0.01"
@@ -3903,10 +3904,10 @@ const Invoicing = ({ invoices, setInvoices }) => {
                                 style={{ width: "100%", textAlign: "right", fontSize: 14, color: "#666", border: "1px solid #ddd", borderRadius: 6, padding: "8px 10px", fontFamily: "monospace" }}
                               />
                             </td>
-                            <td style={{ padding: "8px 4px", textAlign: "right", fontSize: 14, color: "#333", fontWeight: 600, fontFamily: "monospace" }}>
+                            <td style={{ padding: "8px 4px", textAlign: "right", fontSize: 14, color: "#333", fontWeight: 600, fontFamily: "monospace", verticalAlign: "top" }}>
                               ${(it.qty * it.rate).toFixed(2)}
                             </td>
-                            <td style={{ padding: "8px 0 8px 4px" }}>
+                            <td style={{ padding: "8px 0 8px 4px", verticalAlign: "top" }}>
                               <button
                                 onClick={() => removeEditItem(i)}
                                 style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", padding: 4 }}
