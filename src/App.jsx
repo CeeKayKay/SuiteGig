@@ -475,7 +475,7 @@ const Dashboard = ({ transactions, invoices, inquiries, events, onClearDemoData 
         {onClearDemoData && (
           <button
             onClick={() => {
-              if (window.confirm("This will clear ALL demo/sample data from the app. Your real data will remain if synced to Supabase. Continue?")) {
+              if (window.confirm("This will remove sample entries (Acme Corp, Johnson Wedding, etc.) while keeping your real data. Continue?")) {
                 onClearDemoData();
               }
             }}
@@ -492,7 +492,7 @@ const Dashboard = ({ transactions, invoices, inquiries, events, onClearDemoData 
               gap: 6
             }}
           >
-            <Icon name="trash" size={14} /> Clear Demo Data
+            <Icon name="trash" size={14} /> Remove Demo Entries
           </button>
         )}
       </div>
@@ -6083,32 +6083,33 @@ export default function App() {
 
   useEffect(() => { localStorage.setItem("sg_activeView", activeView); }, [activeView]);
 
-  // Clear all demo/sample data from localStorage
+  // Clear only known demo/sample data entries (safer - preserves real data)
   const handleClearDemoData = useCallback(() => {
-    // Clear all app data from localStorage
-    const keysToRemove = [
-      'cs_transactions', 'cs_invoices', 'cs_inquiries', 'cs_contracts',
-      'cs_events', 'cs_proposals', 'cs_expenses', 'cs_creditCards',
-      'cs_bankAccounts', 'cs_categoryRules', 'cs_customCategories', 'cs_budgets'
+    // Known demo data identifiers to remove
+    const demoNames = [
+      'johnson wedding', 'tech summit', 'garcia birthday', 'annual gala',
+      'acme corp', 'techstart', 'green valley', 'robert kim', 'maria garcia',
+      'sarah johnson', 'mike chen', 'adobe creative cloud', 'office depot',
+      'google workspace', 'uber - client meeting', 'state farm insurance',
+      'mystery payment', 'unknown charge'
     ];
-    keysToRemove.forEach(key => localStorage.removeItem(key));
 
-    // Reset all state to empty
-    setTransactions([]);
-    setInvoices([]);
-    setInquiries([]);
-    setContracts([]);
-    setEvents([]);
-    setProposals([]);
-    setExpenses([]);
-    setCreditCards([]);
-    setBankAccounts([]);
-    setCategoryRules({});
-    setCustomCategories([]);
-    setBudgets({});
+    const isDemoEntry = (item) => {
+      const searchText = JSON.stringify(item).toLowerCase();
+      return demoNames.some(name => searchText.includes(name));
+    };
 
-    alert('Demo data cleared! The app now starts fresh.');
-  }, [setTransactions, setInvoices, setInquiries, setContracts, setEvents, setProposals, setExpenses, setCreditCards, setBankAccounts, setCategoryRules, setCustomCategories, setBudgets]);
+    // Filter out demo entries from each collection
+    setTransactions(prev => prev.filter(t => !isDemoEntry(t)));
+    setInvoices(prev => prev.filter(i => !isDemoEntry(i)));
+    setInquiries(prev => prev.filter(i => !isDemoEntry(i)));
+    setContracts(prev => prev.filter(c => !isDemoEntry(c)));
+    setEvents(prev => prev.filter(e => !isDemoEntry(e)));
+    setProposals(prev => prev.filter(p => !isDemoEntry(p)));
+    setExpenses(prev => prev.filter(e => !isDemoEntry(e)));
+
+    alert('Demo data removed! Your real data has been preserved.');
+  }, [setTransactions, setInvoices, setInquiries, setContracts, setEvents, setProposals, setExpenses]);
 
   const handleConvertToContract = (inquiry) => {
     const contract = {

@@ -460,40 +460,276 @@ class DataService {
     return this.delete('expenses', 'cs_expenses', id);
   }
 
-  // Invoices
+  // Invoices - transform between app format and Supabase format
+  _invoiceToSupabase(inv) {
+    return {
+      id: ensureUUID(inv.id),
+      invoice_number: inv.number || inv.invoice_number,
+      client: inv.client,
+      email: inv.email,
+      event_name: inv.eventName || inv.event_name,
+      amount: inv.items?.reduce((sum, item) => sum + (item.qty || 1) * (item.rate || 0), 0) || inv.amount || 0,
+      status: inv.status || 'draft',
+      due_date: inv.dueDate || inv.due_date,
+      paid_date: inv.paidDate || inv.paid_date,
+      items: inv.items || [],
+      notes: inv.notes,
+    };
+  }
+
+  _invoiceFromSupabase(row) {
+    return {
+      id: row.id,
+      number: row.invoice_number,
+      client: row.client,
+      eventName: row.event_name,
+      email: row.email,
+      items: row.items || [],
+      status: row.status,
+      date: row.created_at?.split('T')[0],
+      dueDate: row.due_date,
+      paidDate: row.paid_date,
+      notes: row.notes,
+    };
+  }
+
   async getInvoices() {
-    return this.getAll('invoices', 'cs_invoices', []);
+    const local = loadLocal('cs_invoices', []);
+    if (!this.useSupabase) return local;
+
+    try {
+      const { data, error } = await supabase.from('invoices').select('*').order('created_at', { ascending: false });
+      if (error) { console.error('Error fetching invoices:', error); return local; }
+
+      if ((!data || data.length === 0) && local.length > 0) return local;
+      if (data && data.length > 0) {
+        const transformed = data.map(row => this._invoiceFromSupabase(row));
+        saveLocal('cs_invoices', transformed);
+        return transformed;
+      }
+      return local;
+    } catch (err) { console.error('Error fetching invoices:', err); return local; }
   }
 
   async saveInvoices(invoices) {
-    return this.upsertMany('invoices', 'cs_invoices', invoices);
+    saveLocal('cs_invoices', invoices);
+    if (!this.useSupabase) return invoices;
+
+    try {
+      const rows = invoices.map(inv => this._invoiceToSupabase(inv));
+      await supabase.from('invoices').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      if (rows.length > 0) {
+        const { error } = await supabase.from('invoices').insert(rows);
+        if (error) console.error('Error saving invoices:', error);
+      }
+    } catch (err) { console.error('Error saving invoices:', err); }
+    return invoices;
   }
 
-  // Inquiries
+  // Inquiries - transform between app format and Supabase format
+  _inquiryToSupabase(inq) {
+    return {
+      id: ensureUUID(inq.id),
+      name: inq.name,
+      contact: inq.contact,
+      email: inq.email,
+      phone: inq.phone,
+      phase: inq.phase || 'new',
+      grade: inq.grade || 'B',
+      date: inq.date,
+      value: inq.value || 0,
+      notes: inq.notes,
+      next_steps: inq.nextSteps || inq.next_steps,
+      source_input: inq.sourceInput || inq.source_input,
+    };
+  }
+
+  _inquiryFromSupabase(row) {
+    return {
+      id: row.id,
+      name: row.name,
+      contact: row.contact,
+      email: row.email,
+      phone: row.phone,
+      phase: row.phase || 'new',
+      grade: row.grade || 'B',
+      date: row.date,
+      value: parseFloat(row.value) || 0,
+      notes: row.notes,
+      nextSteps: row.next_steps,
+      sourceInput: row.source_input,
+    };
+  }
+
   async getInquiries() {
-    return this.getAll('inquiries', 'cs_inquiries', []);
+    const local = loadLocal('cs_inquiries', []);
+    if (!this.useSupabase) return local;
+
+    try {
+      const { data, error } = await supabase.from('inquiries').select('*').order('created_at', { ascending: false });
+      if (error) { console.error('Error fetching inquiries:', error); return local; }
+
+      if ((!data || data.length === 0) && local.length > 0) return local;
+      if (data && data.length > 0) {
+        const transformed = data.map(row => this._inquiryFromSupabase(row));
+        saveLocal('cs_inquiries', transformed);
+        return transformed;
+      }
+      return local;
+    } catch (err) { console.error('Error fetching inquiries:', err); return local; }
   }
 
   async saveInquiries(inquiries) {
-    return this.upsertMany('inquiries', 'cs_inquiries', inquiries);
+    saveLocal('cs_inquiries', inquiries);
+    if (!this.useSupabase) return inquiries;
+
+    try {
+      const rows = inquiries.map(inq => this._inquiryToSupabase(inq));
+      await supabase.from('inquiries').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      if (rows.length > 0) {
+        const { error } = await supabase.from('inquiries').insert(rows);
+        if (error) console.error('Error saving inquiries:', error);
+      }
+    } catch (err) { console.error('Error saving inquiries:', err); }
+    return inquiries;
   }
 
-  // Contracts
+  // Contracts - transform between app format and Supabase format
+  _contractToSupabase(c) {
+    return {
+      id: ensureUUID(c.id),
+      client: c.client,
+      email: c.email,
+      event_name: c.eventName || c.event_name,
+      event_date: c.eventDate || c.event_date,
+      venue: c.venue,
+      value: c.value || 0,
+      status: c.status || 'draft',
+      terms: c.terms,
+      notes: c.notes,
+      signed_date: c.signedDate || c.signed_date,
+      created_date: c.createdDate || c.created_date,
+    };
+  }
+
+  _contractFromSupabase(row) {
+    return {
+      id: row.id,
+      client: row.client,
+      eventName: row.event_name,
+      eventDate: row.event_date,
+      venue: row.venue,
+      value: parseFloat(row.value) || 0,
+      status: row.status,
+      terms: row.terms,
+      notes: row.notes,
+      signedDate: row.signed_date,
+      email: row.email,
+    };
+  }
+
   async getContracts() {
-    return this.getAll('contracts', 'cs_contracts', []);
+    const local = loadLocal('cs_contracts', []);
+    if (!this.useSupabase) return local;
+
+    try {
+      const { data, error } = await supabase.from('contracts').select('*').order('created_at', { ascending: false });
+      if (error) { console.error('Error fetching contracts:', error); return local; }
+
+      if ((!data || data.length === 0) && local.length > 0) return local;
+      if (data && data.length > 0) {
+        const transformed = data.map(row => this._contractFromSupabase(row));
+        saveLocal('cs_contracts', transformed);
+        return transformed;
+      }
+      return local;
+    } catch (err) { console.error('Error fetching contracts:', err); return local; }
   }
 
   async saveContracts(contracts) {
-    return this.upsertMany('contracts', 'cs_contracts', contracts);
+    saveLocal('cs_contracts', contracts);
+    if (!this.useSupabase) return contracts;
+
+    try {
+      const rows = contracts.map(c => this._contractToSupabase(c));
+      await supabase.from('contracts').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      if (rows.length > 0) {
+        const { error } = await supabase.from('contracts').insert(rows);
+        if (error) console.error('Error saving contracts:', error);
+      }
+    } catch (err) { console.error('Error saving contracts:', err); }
+    return contracts;
   }
 
-  // Events
+  // Events - transform between app format and Supabase format
+  _eventToSupabase(ev) {
+    return {
+      id: ensureUUID(ev.id),
+      name: ev.name,
+      client: ev.client,
+      date: ev.date,
+      time: ev.time,
+      venue: ev.venue,
+      address: ev.address,
+      email: ev.email,
+      guests: ev.guests || 0,
+      value: ev.value || 0,
+      status: ev.status || 'upcoming',
+      notes: ev.notes,
+      tasks: ev.tasks || [],
+      emails: ev.emails || [],
+    };
+  }
+
+  _eventFromSupabase(row) {
+    return {
+      id: row.id,
+      name: row.name,
+      client: row.client,
+      date: row.date,
+      time: row.time,
+      venue: row.venue,
+      address: row.address,
+      status: row.status,
+      notes: row.notes,
+      tasks: row.tasks || [],
+      emails: row.emails || [],
+      guests: row.guests || 0,
+      value: parseFloat(row.value) || 0,
+    };
+  }
+
   async getEvents() {
-    return this.getAll('events', 'cs_events', []);
+    const local = loadLocal('cs_events', []);
+    if (!this.useSupabase) return local;
+
+    try {
+      const { data, error } = await supabase.from('events').select('*').order('created_at', { ascending: false });
+      if (error) { console.error('Error fetching events:', error); return local; }
+
+      if ((!data || data.length === 0) && local.length > 0) return local;
+      if (data && data.length > 0) {
+        const transformed = data.map(row => this._eventFromSupabase(row));
+        saveLocal('cs_events', transformed);
+        return transformed;
+      }
+      return local;
+    } catch (err) { console.error('Error fetching events:', err); return local; }
   }
 
   async saveEvents(events) {
-    return this.upsertMany('events', 'cs_events', events);
+    saveLocal('cs_events', events);
+    if (!this.useSupabase) return events;
+
+    try {
+      const rows = events.map(ev => this._eventToSupabase(ev));
+      await supabase.from('events').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+      if (rows.length > 0) {
+        const { error } = await supabase.from('events').insert(rows);
+        if (error) console.error('Error saving events:', error);
+      }
+    } catch (err) { console.error('Error saving events:', err); }
+    return events;
   }
 
   // Proposals - primarily localStorage based (Supabase table may not exist)

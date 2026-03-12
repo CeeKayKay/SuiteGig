@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS inquiries (
 CREATE TABLE IF NOT EXISTS contracts (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   client TEXT,
+  email TEXT,
   event_name TEXT,
   event_date TEXT,
   venue TEXT,
@@ -29,6 +30,7 @@ CREATE TABLE IF NOT EXISTS contracts (
   terms TEXT,
   notes TEXT,
   signed_date TEXT,
+  created_date TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -41,9 +43,13 @@ CREATE TABLE IF NOT EXISTS events (
   time TEXT,
   venue TEXT,
   address TEXT,
+  email TEXT,
+  guests INTEGER DEFAULT 0,
+  value NUMERIC DEFAULT 0,
   status TEXT DEFAULT 'upcoming',
   notes TEXT,
   tasks JSONB DEFAULT '[]',
+  emails JSONB DEFAULT '[]',
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -66,6 +72,7 @@ CREATE TABLE IF NOT EXISTS invoices (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   invoice_number TEXT,
   client TEXT,
+  email TEXT,
   event_name TEXT,
   amount NUMERIC DEFAULT 0,
   status TEXT DEFAULT 'draft',
