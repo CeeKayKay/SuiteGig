@@ -1091,6 +1091,7 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
     return d.toISOString().split("T")[0];
   });
   const [reportEndDate, setReportEndDate] = useState(() => new Date().toISOString().split("T")[0]);
+  const [excludedCategories, setExcludedCategories] = useState(new Set());
   const reportRef = useRef(null);
 
   // Plaid check on mount
@@ -2277,13 +2278,21 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
 
       {/* ─── Report Tab ─── */}
       {subTab === "report" && (() => {
-        // Filter expenses by date range
-        const reportExpenses = expenses.filter(e => {
+        // Filter expenses by date range first
+        const dateFilteredExpenses = expenses.filter(e => {
           if (!e.date) return false;
           return e.date >= reportStartDate && e.date <= reportEndDate;
-        }).sort((a, b) => new Date(a.date) - new Date(b.date));
+        });
 
-        // Calculate spending by category
+        // Get all categories in the date range (for the filter UI)
+        const allCategoriesInRange = [...new Set(dateFilteredExpenses.map(e => e.category || "Unknown"))].sort();
+
+        // Filter out excluded categories
+        const reportExpenses = dateFilteredExpenses
+          .filter(e => !excludedCategories.has(e.category || "Unknown"))
+          .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        // Calculate spending by category (only included categories)
         const categoryTotals = reportExpenses.reduce((acc, e) => {
           const cat = e.category || "Unknown";
           acc[cat] = (acc[cat] || 0) + (e.amount || 0);
@@ -2294,6 +2303,22 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
           .sort((a, b) => b[1] - a[1]);
 
         const totalSpending = reportExpenses.reduce((s, e) => s + (e.amount || 0), 0);
+
+        // Toggle category inclusion
+        const toggleCategory = (cat) => {
+          setExcludedCategories(prev => {
+            const next = new Set(prev);
+            if (next.has(cat)) {
+              next.delete(cat);
+            } else {
+              next.add(cat);
+            }
+            return next;
+          });
+        };
+
+        const selectAllCategories = () => setExcludedCategories(new Set());
+        const deselectAllCategories = () => setExcludedCategories(new Set(allCategoriesInRange));
 
         // Generate PDF
         const generatePDF = () => {
@@ -2503,6 +2528,53 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
               </div>
               <Btn icon="download" onClick={generatePDF} disabled={reportExpenses.length === 0}>Download PDF</Btn>
             </div>
+
+            {/* Category Filter */}
+            {allCategoriesInRange.length > 0 && (
+              <div style={{ background: "#1a1d23", borderRadius: 14, padding: "16px 20px", border: "1px solid rgba(255,255,255,0.05)", marginBottom: 24 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <h4 style={{ fontSize: 13, fontWeight: 600, color: "#f0f0f0", margin: 0, display: "flex", alignItems: "center", gap: 8 }}>
+                    <Icon name="filter" size={14} /> Include Categories
+                  </h4>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button onClick={selectAllCategories}
+                      style={{ padding: "4px 10px", borderRadius: 6, border: "none", background: "rgba(99,102,241,0.1)", color: "#818cf8", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>
+                      Select All
+                    </button>
+                    <button onClick={deselectAllCategories}
+                      style={{ padding: "4px 10px", borderRadius: 6, border: "none", background: "rgba(255,255,255,0.04)", color: "#888", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>
+                      Deselect All
+                    </button>
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                  {allCategoriesInRange.map(cat => {
+                    const isIncluded = !excludedCategories.has(cat);
+                    const catAmount = dateFilteredExpenses.filter(e => (e.category || "Unknown") === cat).reduce((s, e) => s + (e.amount || 0), 0);
+                    return (
+                      <label key={cat} style={{
+                        display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 8,
+                        background: isIncluded ? "rgba(99,102,241,0.1)" : "rgba(255,255,255,0.02)",
+                        border: `1px solid ${isIncluded ? "rgba(99,102,241,0.3)" : "rgba(255,255,255,0.06)"}`,
+                        cursor: "pointer", transition: "all 0.15s", opacity: isIncluded ? 1 : 0.5
+                      }}>
+                        <input type="checkbox" checked={isIncluded} onChange={() => toggleCategory(cat)}
+                          style={{ accentColor: "#6366f1", cursor: "pointer" }} />
+                        <div style={{ width: 10, height: 10, borderRadius: 3, background: categoryColors[cat] || "#888" }}></div>
+                        <span style={{ fontSize: 12, color: isIncluded ? "#f0f0f0" : "#888" }}>{cat}</span>
+                        <span style={{ fontSize: 11, color: "#666", fontFamily: "'JetBrains Mono', monospace" }}>{formatCurrency(catAmount)}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+                {excludedCategories.size > 0 && (
+                  <div style={{ marginTop: 12, fontSize: 11, color: "#f59e0b", display: "flex", alignItems: "center", gap: 6 }}>
+                    <Icon name="alert" size={12} />
+                    {excludedCategories.size} categor{excludedCategories.size === 1 ? "y" : "ies"} excluded from report
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Summary Stats */}
             <div style={{ display: "flex", gap: 16, marginBottom: 24 }}>
