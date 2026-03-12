@@ -348,18 +348,19 @@ const normalizeMerchant = (name) => {
     .trim();
 };
 
-// Common chain store brand names (first word is the brand)
+// Common chain store brand names (first word is the brand) - includes common abbreviations
 const CHAIN_STORES = new Set([
-  'walgreens', 'walmart', 'target', 'costco', 'cvs', 'kroger', 'safeway', 'albertsons',
-  'publix', 'wegmans', 'trader', 'whole', 'aldi', 'lidl', 'food', 'giant', 'stop',
-  'meijer', 'heb', 'winn', 'sprouts', 'starbucks', 'mcdonalds', 'subway', 'chipotle',
-  'wendys', 'burger', 'taco', 'chick', 'dominos', 'pizza', 'dunkin', 'panera',
-  'home', 'lowes', 'menards', 'ace', 'autozone', 'oreilly', 'advance', 'napa',
-  'shell', 'chevron', 'exxon', 'mobil', 'bp', 'texaco', 'arco', 'speedway',
-  'amazon', 'ebay', 'best', 'staples', 'office', 'michaels', 'joann', 'hobby',
-  'tjmaxx', 'marshalls', 'ross', 'nordstrom', 'macys', 'kohls', 'jcpenney', 'sears',
-  'dollar', 'family', 'big', 'five', 'bath', 'bed', 'pier', 'pottery', 'williams',
-  'petco', 'petsmart', 'chewy', 'gamestop', 'apple', 'att', 'verizon', 'tmobile', 'sprint'
+  'walgreens', 'walgr', 'walmart', 'walmrt', 'target', 'costco', 'cvs', 'kroger', 'safeway', 'albertsons',
+  'publix', 'wegmans', 'trader', 'whole', 'wholefds', 'wholefoods', 'aldi', 'lidl', 'food', 'giant', 'stop',
+  'meijer', 'heb', 'winn', 'sprouts', 'starbucks', 'starbuck', 'sbux', 'mcdonalds', 'mcdonald', 'subway', 'chipotle',
+  'wendys', 'wendy', 'burger', 'taco', 'chick', 'chickfila', 'dominos', 'domino', 'pizza', 'dunkin', 'panera',
+  'home', 'homedepot', 'lowes', 'lowe', 'menards', 'ace', 'autozone', 'oreilly', 'orly', 'advance', 'napa',
+  'shell', 'chevron', 'exxon', 'mobil', 'bp', 'texaco', 'arco', 'speedway', 'wawa', 'sheetz', 'quiktrip',
+  'amazon', 'amzn', 'ebay', 'best', 'bestbuy', 'staples', 'office', 'michaels', 'joann', 'hobby',
+  'tjmaxx', 'tjx', 'marshalls', 'marshall', 'ross', 'nordstrom', 'macys', 'macy', 'kohls', 'kohl', 'jcpenney', 'jcp', 'sears',
+  'dollar', 'dollartree', 'dollargen', 'family', 'big', 'five', 'bath', 'bed', 'pier', 'pottery', 'williams',
+  'petco', 'petsmart', 'chewy', 'gamestop', 'apple', 'att', 'verizon', 'vzw', 'tmobile', 'sprint',
+  'usps', 'ups', 'fedex', 'dhl', 'grubhub', 'doordash', 'uber', 'lyft', 'instacart', 'postmates'
 ]);
 
 // Extract the core merchant name (brand name without location/store info)
