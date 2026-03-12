@@ -348,12 +348,18 @@ const normalizeMerchant = (name) => {
     .trim();
 };
 
-// US state abbreviations and common location words to strip for merchant core extraction
-const LOCATION_WORDS = new Set([
-  'al','ak','az','ar','ca','co','ct','de','fl','ga','hi','id','il','in','ia','ks','ky','la','me','md',
-  'ma','mi','mn','ms','mo','mt','ne','nv','nh','nj','nm','ny','nc','nd','oh','ok','or','pa','ri','sc',
-  'sd','tn','tx','ut','vt','va','wa','wv','wi','wy','dc', // US states
-  'usa','us','store','shop','inc','llc','corp','ltd','the','and','of','at','in','on' // common words
+// Common chain store brand names (first word is the brand)
+const CHAIN_STORES = new Set([
+  'walgreens', 'walmart', 'target', 'costco', 'cvs', 'kroger', 'safeway', 'albertsons',
+  'publix', 'wegmans', 'trader', 'whole', 'aldi', 'lidl', 'food', 'giant', 'stop',
+  'meijer', 'heb', 'winn', 'sprouts', 'starbucks', 'mcdonalds', 'subway', 'chipotle',
+  'wendys', 'burger', 'taco', 'chick', 'dominos', 'pizza', 'dunkin', 'panera',
+  'home', 'lowes', 'menards', 'ace', 'autozone', 'oreilly', 'advance', 'napa',
+  'shell', 'chevron', 'exxon', 'mobil', 'bp', 'texaco', 'arco', 'speedway',
+  'amazon', 'ebay', 'best', 'staples', 'office', 'michaels', 'joann', 'hobby',
+  'tjmaxx', 'marshalls', 'ross', 'nordstrom', 'macys', 'kohls', 'jcpenney', 'sears',
+  'dollar', 'family', 'big', 'five', 'bath', 'bed', 'pier', 'pottery', 'williams',
+  'petco', 'petsmart', 'chewy', 'gamestop', 'apple', 'att', 'verizon', 'tmobile', 'sprint'
 ]);
 
 // Extract the core merchant name (brand name without location/store info)
@@ -361,18 +367,27 @@ const extractMerchantCore = (name) => {
   const normalized = normalizeMerchant(name);
   const words = normalized.split(' ').filter(w => w.length > 0);
 
-  // Filter out location words and keep brand words
-  const coreWords = [];
-  for (const word of words) {
-    // Stop if we hit a location word (city/state usually comes after brand)
-    if (LOCATION_WORDS.has(word) && coreWords.length > 0) break;
-    // Skip pure numbers
-    if (/^\d+$/.test(word)) continue;
-    coreWords.push(word);
+  if (words.length === 0) return '';
+
+  // If first word is a known chain store, just use that word
+  const firstWord = words[0];
+  if (CHAIN_STORES.has(firstWord)) {
+    return firstWord;
   }
 
-  // Return at least the first word if we have nothing
-  return coreWords.length > 0 ? coreWords.join(' ') : (words[0] || '');
+  // For other merchants, use first 1-2 significant words (skip numbers)
+  const coreWords = [];
+  for (const word of words) {
+    // Skip pure numbers
+    if (/^\d+$/.test(word)) continue;
+    // Skip very short words (likely abbreviations or noise)
+    if (word.length <= 2) continue;
+    coreWords.push(word);
+    // Stop after 2 words for non-chain merchants
+    if (coreWords.length >= 2) break;
+  }
+
+  return coreWords.length > 0 ? coreWords.join(' ') : firstWord;
 };
 
 // Check if two merchants match (considering domains, brand names, and fuzzy matching)
