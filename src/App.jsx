@@ -2300,6 +2300,7 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
           const printWindow = window.open("", "_blank");
           const startFormatted = new Date(reportStartDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
           const endFormatted = new Date(reportEndDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+          const taxYear = new Date(reportStartDate).getFullYear();
 
           const categoryRows = sortedCategories.map(([cat, amount]) => `
             <tr>
@@ -2309,14 +2310,50 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
             </tr>
           `).join("");
 
-          const expenseRows = reportExpenses.map(e => `
-            <tr>
-              <td style="padding: 6px 10px; border-bottom: 1px solid #eee; font-size: 12px;">${new Date(e.date).toLocaleDateString()}</td>
-              <td style="padding: 6px 10px; border-bottom: 1px solid #eee; font-size: 12px;">${e.merchant || "Unknown"}</td>
-              <td style="padding: 6px 10px; border-bottom: 1px solid #eee; font-size: 12px;">${e.category || "Unknown"}</td>
-              <td style="padding: 6px 10px; border-bottom: 1px solid #eee; text-align: right; font-family: monospace; font-size: 12px;">$${(e.amount || 0).toFixed(2)}</td>
-            </tr>
-          `).join("");
+          // Group expenses by category for tax preparer section
+          const expensesByCategory = {};
+          reportExpenses.forEach(e => {
+            const cat = e.category || "Uncategorized";
+            if (!expensesByCategory[cat]) expensesByCategory[cat] = [];
+            expensesByCategory[cat].push(e);
+          });
+
+          // Generate tax-preparer-friendly detailed sections by category
+          const taxDetailSections = sortedCategories.map(([cat, catTotal]) => {
+            const catExpenses = expensesByCategory[cat] || [];
+            const rows = catExpenses.map(e => `
+              <tr>
+                <td style="padding: 6px 10px; border-bottom: 1px solid #eee; font-size: 11px; white-space: nowrap;">${new Date(e.date).toLocaleDateString()}</td>
+                <td style="padding: 6px 10px; border-bottom: 1px solid #eee; font-size: 11px;">${e.merchant || "Unknown"}</td>
+                <td style="padding: 6px 10px; border-bottom: 1px solid #eee; font-size: 11px; color: #666;">${e.notes || "—"}</td>
+                <td style="padding: 6px 10px; border-bottom: 1px solid #eee; font-size: 11px; color: #666;">${e.cardLast4 === "manual" ? "Cash/Other" : e.cardLast4 ? `****${e.cardLast4}` : "—"}</td>
+                <td style="padding: 6px 10px; border-bottom: 1px solid #eee; text-align: right; font-family: monospace; font-size: 11px;">$${(e.amount || 0).toFixed(2)}</td>
+              </tr>
+            `).join("");
+
+            return `
+              <div class="category-section" style="margin-bottom: 30px; page-break-inside: avoid;">
+                <h3 style="font-size: 14px; margin: 0 0 10px 0; padding: 8px 12px; background: #f0f0f0; border-left: 4px solid #333;">
+                  ${cat}
+                  <span style="float: right; font-family: monospace;">$${catTotal.toFixed(2)} (${catExpenses.length} items)</span>
+                </h3>
+                <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                  <thead>
+                    <tr style="background: #fafafa;">
+                      <th style="text-align: left; padding: 6px 10px; font-weight: 600; font-size: 10px; text-transform: uppercase; width: 80px;">Date</th>
+                      <th style="text-align: left; padding: 6px 10px; font-weight: 600; font-size: 10px; text-transform: uppercase;">Vendor/Merchant</th>
+                      <th style="text-align: left; padding: 6px 10px; font-weight: 600; font-size: 10px; text-transform: uppercase;">Business Purpose/Notes</th>
+                      <th style="text-align: left; padding: 6px 10px; font-weight: 600; font-size: 10px; text-transform: uppercase; width: 80px;">Payment</th>
+                      <th style="text-align: right; padding: 6px 10px; font-weight: 600; font-size: 10px; text-transform: uppercase; width: 90px;">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${rows}
+                  </tbody>
+                </table>
+              </div>
+            `;
+          }).join("");
 
           printWindow.document.write(`
             <!DOCTYPE html>
@@ -2324,9 +2361,10 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
             <head>
               <title>Expense Report - ${startFormatted} to ${endFormatted}</title>
               <style>
-                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px; color: #333; max-width: 800px; margin: 0 auto; }
+                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 40px; color: #333; max-width: 900px; margin: 0 auto; }
                 h1 { font-size: 24px; margin-bottom: 8px; }
-                .subtitle { color: #666; margin-bottom: 30px; }
+                .subtitle { color: #666; margin-bottom: 10px; }
+                .tax-notice { background: #fffbeb; border: 1px solid #fbbf24; border-radius: 6px; padding: 12px 16px; margin-bottom: 25px; font-size: 12px; color: #92400e; }
                 .summary-box { background: #f8f9fa; border-radius: 8px; padding: 20px; margin-bottom: 30px; display: flex; gap: 40px; }
                 .summary-item { }
                 .summary-label { font-size: 12px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
@@ -2336,16 +2374,25 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
                 th { text-align: left; padding: 10px 12px; background: #f0f0f0; font-weight: 600; font-size: 12px; text-transform: uppercase; }
                 th:last-child { text-align: right; }
                 .total-row td { font-weight: 700; border-top: 2px solid #333; background: #f8f9fa; }
-                @media print { body { padding: 20px; } }
+                .page-break { page-break-before: always; }
+                @media print {
+                  body { padding: 20px; }
+                  .page-break { page-break-before: always; }
+                }
               </style>
             </head>
             <body>
-              <h1>Expense Report</h1>
+              <h1>Business Expense Report</h1>
               <p class="subtitle">${startFormatted} - ${endFormatted}</p>
+              <div class="tax-notice">
+                <strong>Tax Documentation:</strong> This report is organized by expense category for tax preparation purposes.
+                Each section includes date, vendor, business purpose, payment method, and amount.
+                Retain original receipts for expenses over $75 or as required by your tax jurisdiction.
+              </div>
 
               <div class="summary-box">
                 <div class="summary-item">
-                  <div class="summary-label">Total Spending</div>
+                  <div class="summary-label">Total Business Expenses</div>
                   <div class="summary-value">$${totalSpending.toFixed(2)}</div>
                 </div>
                 <div class="summary-item">
@@ -2356,44 +2403,54 @@ const Expenses = ({ expenses, setExpenses, creditCards, setCreditCards, budgets,
                   <div class="summary-label">Categories</div>
                   <div class="summary-value">${sortedCategories.length}</div>
                 </div>
+                <div class="summary-item">
+                  <div class="summary-label">Tax Year</div>
+                  <div class="summary-value">${taxYear}</div>
+                </div>
               </div>
 
-              <h2>Spending by Category</h2>
+              <h2>Summary by Category</h2>
               <table>
                 <thead>
                   <tr>
-                    <th>Category</th>
-                    <th style="text-align: right;">Amount</th>
+                    <th>Expense Category</th>
+                    <th style="text-align: right;">Total Amount</th>
                     <th style="text-align: right;">% of Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   ${categoryRows}
                   <tr class="total-row">
-                    <td style="padding: 10px 12px;">Total</td>
+                    <td style="padding: 10px 12px;">TOTAL BUSINESS EXPENSES</td>
                     <td style="padding: 10px 12px; text-align: right; font-family: monospace;">$${totalSpending.toFixed(2)}</td>
                     <td style="padding: 10px 12px; text-align: right;">100%</td>
                   </tr>
                 </tbody>
               </table>
 
-              <h2>All Transactions (${reportExpenses.length})</h2>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Merchant</th>
-                    <th>Category</th>
-                    <th style="text-align: right;">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${expenseRows}
-                </tbody>
-              </table>
+              <div class="page-break"></div>
+              <h2>Detailed Expenses by Category</h2>
+              <p style="font-size: 12px; color: #666; margin-bottom: 20px;">
+                The following sections list all expenses grouped by category. Each entry includes the transaction date,
+                vendor/merchant name, business purpose or notes, payment method, and amount.
+              </p>
+              ${taxDetailSections}
+
+              <div style="margin-top: 50px; padding-top: 20px; border-top: 1px solid #ddd;">
+                <p style="font-size: 11px; color: #666; margin-bottom: 8px;">
+                  <strong>Preparer Notes:</strong>
+                </p>
+                <ul style="font-size: 11px; color: #666; margin: 0; padding-left: 20px;">
+                  <li>Meals & Entertainment expenses may be subject to 50% deduction limitation (IRS rules may vary by year)</li>
+                  <li>Travel expenses should be reviewed for mixed personal/business use</li>
+                  <li>Software & Subscriptions may qualify for immediate deduction or amortization</li>
+                  <li>Verify state-specific deduction rules apply</li>
+                </ul>
+              </div>
 
               <p style="margin-top: 40px; font-size: 11px; color: #999; text-align: center;">
-                Generated on ${new Date().toLocaleString()} by SuiteGig
+                Generated on ${new Date().toLocaleString()} by SuiteGig<br/>
+                <em>This report is for informational purposes. Consult a tax professional for advice.</em>
               </p>
             </body>
             </html>
